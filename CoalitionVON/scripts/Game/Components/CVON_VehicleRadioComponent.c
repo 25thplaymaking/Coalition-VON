@@ -9,8 +9,8 @@ class CVON_VehicleRadioComponentClass: CVON_RadioComponentClass
 //Radio: only the crew (driver/pilot and turret seats: gunner, commander, door gunner) can use it. While
 //seated it sits at the end of their radio list, so it's on whichever radio key comes after their own
 //radios, and it can be opened and tuned like any other radio.
-//Speaker: the radio also plays out loud, so anyone near the vehicle hears its traffic. The crew can
-//turn it off (VONVehicleSpeaker keybind).
+//Speaker: the radio can also play out loud, so anyone near the vehicle hears its traffic. It starts off;
+//the crew turn it on and off (VONVehicleSpeaker keybind).
 //Intercom: the crew hear each other clearly whenever they talk, whatever the engine noise or distance
 //between seats.
 //==========================================================================================================================================================================
@@ -95,12 +95,7 @@ class CVON_VehicleRadioComponent: CVON_RadioComponent
 		return m_bHasSpeaker && HasRadio();
 	}
 
-	//Speaker: on from the start, comes from the vehicle (m_iSpeakerRange is set on the base prefabs)
-	override bool SpeakerOnByDefault()
-	{
-		return true;
-	}
-
+	//Speaker: off until the crew turn it on, comes from the vehicle (m_iSpeakerRange is set on the base prefabs)
 	override bool CanUseSpeaker()
 	{
 		return HasSpeaker();

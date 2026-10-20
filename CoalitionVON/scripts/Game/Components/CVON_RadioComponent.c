@@ -66,8 +66,8 @@ class CVON_RadioComponent: ScriptComponent
 	//What ear it comes out of, neither needs to be tracked across clients cause who gives af.
 	CVON_EStereo m_eStereo = CVON_EStereo.BOTH;
 
-	//Speaker: the radio plays out loud for the people around it, positioned where it is. Vehicle radios
-	//start on; a manpack's carrier turns theirs on (CanUseSpeaker / SpeakerOnByDefault).
+	//Speaker: the radio plays out loud for the people around it, positioned where it is. Speakers start
+	//off; a vehicle's crew or a manpack's carrier turns theirs on (CanUseSpeaker / SpeakerOnByDefault).
 	[Attribute("15", desc: "Metres at which the radio's speaker fades out")]
 	int m_iSpeakerRange;
 
