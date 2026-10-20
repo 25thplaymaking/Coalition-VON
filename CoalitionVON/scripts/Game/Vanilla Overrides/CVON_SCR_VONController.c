@@ -685,6 +685,8 @@ modded class SCR_VONController
 		if (!m_PlayerRplComponent || !m_CharacterController || !m_Player)
 			return;
 
+		RefreshListenedRadios(timeSlice);
+
 		m_Camera = m_CameraManager.CurrentCamera();
 		if (!m_Camera)
 			return;
@@ -756,6 +758,65 @@ modded class SCR_VONController
 		}
 		if (gainTick || checkServerData || m_bIsBroadcasting != m_bLastWrittenTransmitting)
 			WriteJSON(checkServerData);
+	}
+
+
+	//Radio listening: rewrite RadioData.json when the target's radios change (retuned, picked up, dropped,
+	//a vehicle radio) - checked once a second while listening
+	//==========================================================================================================================================================================
+	protected float m_fListenRadioTimer;
+	protected string m_sListenRadioState;
+
+	protected void RefreshListenedRadios(float timeSlice)
+	{
+		int target = m_PlayerController.GetRadioListenTarget();
+		if (target == 0)
+		{
+			m_sListenRadioState = "";
+			return;
+		}
+
+		m_fListenRadioTimer -= timeSlice;
+		if (m_fListenRadioTimer > 0)
+			return;
+
+		m_fListenRadioTimer = 1;
+		string state = target.ToString();
+		array<RplId> radios = m_VONGameModeComponent.GetRadios(m_PlayerManager.GetPlayerControlledEntity(target));
+		if (radios)
+		{
+			foreach (RplId radio: radios)
+			{
+				RplComponent radioRpl = RplComponent.Cast(Replication.FindItem(radio));
+				if (!radioRpl || !radioRpl.GetEntity())
+					continue;
+
+				CVON_RadioComponent radioComp = CVON_RadioComponent.Cast(radioRpl.GetEntity().FindComponent(CVON_RadioComponent));
+				if (radioComp)
+					state += string.Format("|%1:%2:%3:%4:%5", radio, radioComp.m_sFrequency, radioComp.m_iTimeDeviation, radioComp.m_sFactionKey, radioComp.m_bPower);
+			}
+		}
+
+		if (state == m_sListenRadioState)
+			return;
+
+		m_sListenRadioState = state;
+		CVON_RadioComponent.WriteRadioData(m_Player);
+	}
+
+	//Where our radios are, for signal strength: our character - or, listening to another player's radios, theirs
+	//==========================================================================================================================================================================
+	vector GetRadioReceiverOrigin()
+	{
+		int target = m_PlayerController.GetRadioListenTarget();
+		if (target != 0)
+		{
+			IEntity targetEntity = m_PlayerManager.GetPlayerControlledEntity(target);
+			if (targetEntity)
+				return targetEntity.GetOrigin();
+		}
+
+		return m_Player.GetOrigin();
 	}
 
 	//Who is within voice range. Radio entries arrive by RPC and are left alone here.
@@ -1764,9 +1825,9 @@ modded class SCR_VONController
 			if (container.m_eVonType == CVON_EVONType.RADIO)
 			{
 				if (container.m_SoundSource)
-					container.m_fConnectionQuality = GetSignalStrength(vector.Distance(m_Player.GetOrigin(), container.m_SoundSource.GetOrigin()), container.m_iMaxDistance);
+					container.m_fConnectionQuality = GetSignalStrength(vector.Distance(GetRadioReceiverOrigin(), container.m_SoundSource.GetOrigin()), container.m_iMaxDistance);
 				else
-					container.m_fConnectionQuality = GetSignalStrength(vector.Distance(m_Player.GetOrigin(), container.m_vSenderLocation), container.m_iMaxDistance);
+					container.m_fConnectionQuality = GetSignalStrength(vector.Distance(GetRadioReceiverOrigin(), container.m_vSenderLocation), container.m_iMaxDistance);
 			}
 			else if (container.m_eVonType == CVON_EVONType.SPEAKER && container.m_SpeakerEntity)
 			{

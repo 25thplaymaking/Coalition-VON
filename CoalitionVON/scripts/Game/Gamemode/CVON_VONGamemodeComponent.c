@@ -41,6 +41,13 @@ class CVON_VONGameModeComponent: SCR_BaseGameModeComponent
 	// (it used to go to every player on every push-to-talk release).
 	ref map<int, ref array<int>> m_mBroadcastReceivers = new map<int, ref array<int>>();
 
+	//Radio listening (SetRadioListenTarget): listener -> target, target -> listeners, and each sender's
+	//current transmission so a listener who starts mid-call hears the rest of it
+	protected ref map<int, int> m_mRadioListenTarget = new map<int, int>();
+	protected ref map<int, ref array<int>> m_mRadioListeners = new map<int, ref array<int>>();
+	protected ref map<int, ref CVON_VONContainer> m_mActiveBroadcasts = new map<int, ref CVON_VONContainer>();
+	protected ref map<int, float> m_mActiveBroadcastRange = new map<int, float>();
+
 	// Server: radios with a speaker (vehicle radios, manpacks whose speaker was turned on), so a transmission
 	// can find the speakers tuned to its frequency
 	ref array<CVON_RadioComponent> m_aSpeakerRadios = {};
@@ -115,6 +122,7 @@ class CVON_VONGameModeComponent: SCR_BaseGameModeComponent
 		{
 			RemoveLocalVONBroadcasts(playerId);
 			RemoveFromFrequencyIndex(playerId);
+			StopRadioListeningFor(playerId);
 		}
 		if (m_PlayerFreqArray.Contains(playerId))
 			m_PlayerFreqArray.Remove(playerId);
@@ -255,6 +263,8 @@ class CVON_VONGameModeComponent: SCR_BaseGameModeComponent
 		if (!sender)
 			return;
 		vector senderOrigin = sender.GetOrigin();
+		m_mActiveBroadcasts.Set(playerIdToAdd, VONContainer);
+		m_mActiveBroadcastRange.Set(playerIdToAdd, maxDist);
 
 		array<int> receivers;
 		if (!m_mBroadcastReceivers.Find(playerIdToAdd, receivers) || !receivers)
@@ -312,6 +322,8 @@ class CVON_VONGameModeComponent: SCR_BaseGameModeComponent
 				receiverController.AddLocalVONBroadcast(VONContainer, playerIdToAdd, senderOrigin, maxDist);
 				if (!receivers.Contains(playerId))
 					receivers.Insert(playerId);
+
+				ForwardToRadioListeners(playerId, VONContainer, playerIdToAdd, senderOrigin, maxDist, receivers);
 			}
 		}
 
@@ -501,6 +513,9 @@ class CVON_VONGameModeComponent: SCR_BaseGameModeComponent
 	//==========================================================================================================================================================================
 	void RemoveLocalVONBroadcasts(int playerIdToRemove)
 	{
+		m_mActiveBroadcasts.Remove(playerIdToRemove);
+		m_mActiveBroadcastRange.Remove(playerIdToRemove);
+
 		array<int> receivers;
 		if (!m_mBroadcastReceivers.Find(playerIdToRemove, receivers) || !receivers)
 			return;
@@ -517,6 +532,159 @@ class CVON_VONGameModeComponent: SCR_BaseGameModeComponent
 
 			pc.RemoveLocalVONBroadcast(playerIdToRemove);
 		}
+	}
+
+	//Radio listening: a player hears what another player's radios receive (an addon's spectators, say).
+	//The server forwards every transmission the target receives - including any already under way - and
+	//takes them back when the listening stops. Nobody may until an addon allows it (CanListenToRadios).
+	//==========================================================================================================================================================================
+	bool CanListenToRadios(int listenerId, int targetId)
+	{
+		return false;
+	}
+
+	//targetId 0 stops listening
+	//==========================================================================================================================================================================
+	void SetRadioListenTarget(int listenerId, int targetId)
+	{
+		if (targetId != 0 && (targetId == listenerId || !CanListenToRadios(listenerId, targetId)))
+			targetId = 0;
+
+		int current;
+		m_mRadioListenTarget.Find(listenerId, current);
+		if (current == targetId)
+			return;
+
+		StopRadioListening(listenerId);
+		if (targetId == 0)
+			return;
+
+		m_mRadioListenTarget.Set(listenerId, targetId);
+		array<int> listeners;
+		if (!m_mRadioListeners.Find(targetId, listeners) || !listeners)
+		{
+			listeners = {};
+			m_mRadioListeners.Set(targetId, listeners);
+		}
+		listeners.Insert(listenerId);
+
+		//Transmissions the target is hearing right now
+		PlayerManager pm = GetGame().GetPlayerManager();
+		foreach (int senderId, array<int> receivers: m_mBroadcastReceivers)
+		{
+			if (!receivers || senderId == listenerId || !receivers.Contains(targetId) || receivers.Contains(listenerId))
+				continue;
+
+			CVON_VONContainer container = m_mActiveBroadcasts.Get(senderId);
+			IEntity sender = pm.GetPlayerControlledEntity(senderId);
+			SCR_PlayerController listenerController = SCR_PlayerController.Cast(pm.GetPlayerController(listenerId));
+			if (!container || !sender || !listenerController)
+				continue;
+
+			listenerController.AddLocalVONBroadcast(container, senderId, sender.GetOrigin(), m_mActiveBroadcastRange.Get(senderId));
+			receivers.Insert(listenerId);
+		}
+	}
+
+	//Stops a player listening, and takes back what they were hearing only through the target
+	//==========================================================================================================================================================================
+	protected void StopRadioListening(int listenerId)
+	{
+		int targetId;
+		if (!m_mRadioListenTarget.Find(listenerId, targetId))
+			return;
+
+		m_mRadioListenTarget.Remove(listenerId);
+		array<int> listeners;
+		if (m_mRadioListeners.Find(targetId, listeners) && listeners)
+		{
+			listeners.RemoveItem(listenerId);
+			if (listeners.IsEmpty())
+				m_mRadioListeners.Remove(targetId);
+		}
+
+		SCR_BaseGameMode gamemode = SCR_BaseGameMode.Cast(GetGame().GetGameMode());
+		PlayerManager pm = GetGame().GetPlayerManager();
+		SCR_PlayerController listenerController = SCR_PlayerController.Cast(pm.GetPlayerController(listenerId));
+		IEntity listener = pm.GetPlayerControlledEntity(listenerId);
+		foreach (int senderId, array<int> receivers: m_mBroadcastReceivers)
+		{
+			if (!receivers || !receivers.Contains(listenerId))
+				continue;
+
+			//Still on a radio of their own
+			CVON_VONContainer container = m_mActiveBroadcasts.Get(senderId);
+			if (container && gamemode && HasMatchingRadio(listener, container, gamemode.IsEncryptionEnabled()))
+				continue;
+
+			receivers.RemoveItem(listenerId);
+			if (listenerController)
+				listenerController.RemoveLocalVONBroadcast(senderId);
+		}
+	}
+
+	//A player left: they stop listening, and nobody listens to them any more
+	//==========================================================================================================================================================================
+	protected void StopRadioListeningFor(int playerId)
+	{
+		StopRadioListening(playerId);
+
+		array<int> listeners;
+		if (!m_mRadioListeners.Find(playerId, listeners) || !listeners)
+			return;
+
+		array<int> listenerIds = {};
+		listenerIds.Copy(listeners);
+		foreach (int listenerId: listenerIds)
+		{
+			StopRadioListening(listenerId);
+		}
+	}
+
+	//A transmission the receiver just got: to everyone listening to their radios too
+	//==========================================================================================================================================================================
+	protected void ForwardToRadioListeners(int receiverId, CVON_VONContainer VONContainer, int senderId, vector senderOrigin, float maxDist, array<int> receivers)
+	{
+		array<int> listeners;
+		if (!m_mRadioListeners.Find(receiverId, listeners) || !listeners)
+			return;
+
+		PlayerManager pm = GetGame().GetPlayerManager();
+		foreach (int listenerId: listeners)
+		{
+			if (listenerId == senderId || receivers.Contains(listenerId))
+				continue;
+
+			SCR_PlayerController listenerController = SCR_PlayerController.Cast(pm.GetPlayerController(listenerId));
+			if (!listenerController)
+				continue;
+
+			listenerController.AddLocalVONBroadcast(VONContainer, senderId, senderOrigin, maxDist);
+			receivers.Insert(listenerId);
+		}
+	}
+
+	//Does one of this player's radios receive the transmission (frequency, time deviation, key) - as AddLocalVONBroadcasts checks
+	//==========================================================================================================================================================================
+	protected bool HasMatchingRadio(IEntity player, CVON_VONContainer VONContainer, bool encryption)
+	{
+		array<IEntity> radios = GetRadioEntities(player);
+		if (!radios)
+			return false;
+
+		foreach (IEntity radio: radios)
+		{
+			CVON_RadioComponent radioComp = CVON_RadioComponent.Cast(radio.FindComponent(CVON_RadioComponent));
+			if (!radioComp || radioComp.m_sFrequency != VONContainer.m_sFrequency || radioComp.m_iTimeDeviation != VONContainer.m_iTimeDeviation)
+				continue;
+
+			if (encryption && VONContainer.m_sFactionKey != radioComp.m_sFactionKey)
+				continue;
+
+			return true;
+		}
+
+		return false;
 	}
 
 	//Just an easy way for me to get all the radios on an entity.

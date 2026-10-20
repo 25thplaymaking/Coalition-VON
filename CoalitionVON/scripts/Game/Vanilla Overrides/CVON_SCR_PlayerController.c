@@ -31,6 +31,34 @@ modded class SCR_PlayerController
 
 	int m_iAmountOfTimesRadioRotated = 1;
 
+	//Radio listening (see CVON_VONGameModeComponent.SetRadioListenTarget): whose radios we hear as well as our
+	//own, 0 for nobody. Their radios join our RadioData.json, so their traffic plays as radio.
+	//==========================================================================================================================================================================
+	protected int m_iRadioListenTarget;
+
+	int GetRadioListenTarget()
+	{
+		return m_iRadioListenTarget;
+	}
+
+	void SetRadioListenTarget(int targetPlayerId)
+	{
+		if (targetPlayerId == m_iRadioListenTarget)
+			return;
+
+		m_iRadioListenTarget = targetPlayerId;
+		Rpc(RpcAsk_SetRadioListenTarget, targetPlayerId);
+		CVON_RadioComponent.WriteRadioData(GetLocalControlledEntity());
+	}
+
+	[RplRpc(RplChannel.Reliable, RplRcver.Server)]
+	protected void RpcAsk_SetRadioListenTarget(int targetPlayerId)
+	{
+		CVON_VONGameModeComponent gamemode = CVON_VONGameModeComponent.GetInstance();
+		if (gamemode)
+			gamemode.SetRadioListenTarget(GetPlayerId(), targetPlayerId);
+	}
+
 	override void EOnInit(IEntity owner)
 	{
 		super.EOnInit(owner);

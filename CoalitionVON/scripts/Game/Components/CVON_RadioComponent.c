@@ -665,6 +665,43 @@ class CVON_RadioComponent: ScriptComponent
 			radioFreqs += radioComp.m_sFrequency + "|";
 			factionKeys += radioComp.m_sFactionKey + "|";
 		}
+		//Listening to another player's radios (SCR_PlayerController.SetRadioListenTarget): theirs too, so the
+		//plugin plays their traffic as radio. Full volume in both ears - volume and ear aren't replicated - and
+		//not in the frequency list sent to the server, which only routes to radios a player really carries.
+		int listenTarget = pc.GetRadioListenTarget();
+		if (listenTarget != 0 && !pc.GetHeadsetLoweredState())
+		{
+			IEntity target = GetGame().GetPlayerManager().GetPlayerControlledEntity(listenTarget);
+			array<RplId> targetRadios = CVON_VONGameModeComponent.GetInstance().GetRadios(target);
+			if (targetRadios)
+			{
+				foreach (RplId targetRadio: targetRadios)
+				{
+					if (radios.Contains(targetRadio))
+						continue;
+
+					RplComponent targetRadioRpl = RplComponent.Cast(Replication.FindItem(targetRadio));
+					if (!targetRadioRpl || !targetRadioRpl.GetEntity())
+						continue;
+
+					CVON_RadioComponent targetRadioComp = CVON_RadioComponent.Cast(targetRadioRpl.GetEntity().FindComponent(CVON_RadioComponent));
+					if (!targetRadioComp || !targetRadioComp.m_bPower)
+						continue;
+
+					VONSave.StartObject("L" + targetRadio.ToString());
+					VONSave.WriteValue("Freq", targetRadioComp.m_sFrequency);
+					VONSave.WriteValue("TimeDeviation", targetRadioComp.m_iTimeDeviation);
+					VONSave.WriteValue("Volume", 9);
+					VONSave.WriteValue("Stereo", CVON_EStereo.BOTH);
+					if (gamemode.IsEncryptionEnabled())
+						VONSave.WriteValue("FactionKey", targetRadioComp.m_sFactionKey);
+					else
+						VONSave.WriteValue("FactionKey", "");
+					VONSave.EndObject();
+				}
+			}
+		}
+
 		SCR_PlayerController.Cast(GetGame().GetPlayerController()).UpdateFreqArray(radioFreqs, factionKeys);
 		VONSave.SaveToFile("$profile:/RadioData.json");
 	}
