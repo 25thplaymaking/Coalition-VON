@@ -666,13 +666,17 @@ class CVON_RadioComponent: ScriptComponent
 			factionKeys += radioComp.m_sFactionKey + "|";
 		}
 		//Listening to another player's radios (SCR_PlayerController.SetRadioListenTarget): theirs too, so the
-		//plugin plays their traffic as radio. Full volume in both ears - volume and ear aren't replicated - and
-		//not in the frequency list sent to the server, which only routes to radios a player really carries.
+		//plugin plays their traffic as radio. Not in the frequency list sent to the server, which only routes
+		//to radios a player really carries. Volume and ear aren't replicated, so they play at full volume and
+		//are spread across the ears to tell the nets apart: one radio in both ears; with more, the first left,
+		//the second right, any others in both.
 		int listenTarget = pc.GetRadioListenTarget();
 		if (listenTarget != 0 && !pc.GetHeadsetLoweredState())
 		{
 			IEntity target = GetGame().GetPlayerManager().GetPlayerControlledEntity(listenTarget);
 			array<RplId> targetRadios = CVON_VONGameModeComponent.GetInstance().GetRadios(target);
+			array<RplId> listenedIds = {};
+			array<CVON_RadioComponent> listenedRadios = {};
 			if (targetRadios)
 			{
 				foreach (RplId targetRadio: targetRadios)
@@ -688,17 +692,29 @@ class CVON_RadioComponent: ScriptComponent
 					if (!targetRadioComp || !targetRadioComp.m_bPower)
 						continue;
 
-					VONSave.StartObject("L" + targetRadio.ToString());
-					VONSave.WriteValue("Freq", targetRadioComp.m_sFrequency);
-					VONSave.WriteValue("TimeDeviation", targetRadioComp.m_iTimeDeviation);
-					VONSave.WriteValue("Volume", 9);
-					VONSave.WriteValue("Stereo", CVON_EStereo.BOTH);
-					if (gamemode.IsEncryptionEnabled())
-						VONSave.WriteValue("FactionKey", targetRadioComp.m_sFactionKey);
-					else
-						VONSave.WriteValue("FactionKey", "");
-					VONSave.EndObject();
+					listenedIds.Insert(targetRadio);
+					listenedRadios.Insert(targetRadioComp);
 				}
+			}
+
+			foreach (int listenedIndex, CVON_RadioComponent listenedRadio: listenedRadios)
+			{
+				CVON_EStereo ear = CVON_EStereo.BOTH;
+				if (listenedRadios.Count() > 1 && listenedIndex == 0)
+					ear = CVON_EStereo.LEFT;
+				else if (listenedRadios.Count() > 1 && listenedIndex == 1)
+					ear = CVON_EStereo.RIGHT;
+
+				VONSave.StartObject("L" + listenedIds[listenedIndex].ToString());
+				VONSave.WriteValue("Freq", listenedRadio.m_sFrequency);
+				VONSave.WriteValue("TimeDeviation", listenedRadio.m_iTimeDeviation);
+				VONSave.WriteValue("Volume", 9);
+				VONSave.WriteValue("Stereo", ear);
+				if (gamemode.IsEncryptionEnabled())
+					VONSave.WriteValue("FactionKey", listenedRadio.m_sFactionKey);
+				else
+					VONSave.WriteValue("FactionKey", "");
+				VONSave.EndObject();
 			}
 		}
 
