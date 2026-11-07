@@ -76,6 +76,11 @@ Each radio keeps its own picture; its keys and screen were rebuilt (`CVON_RadioM
   respawn with the other radio settings. The server uses the sender's power when it works out who hears
   the call. Per radio prefab: `m_fMediumPowerRange` (0.5) and `m_fLowPowerRange` (0.25). Range grows
   roughly with the square root of power, so a quarter of the range is about a sixteenth of the power.
+- **TX / RX marker and signal bars.** Five bars on the status line (on the R-187, a meter under the
+  frequency). While someone talks on a channel the radio hears, it shows R and the bars give the signal
+  strength: distance against the sender's range, minus terrain in the way, the same value that adds static
+  to the call. While you transmit on that radio it shows T and the bars show your power setting
+  (LOW 2, MED 3, HIGH 5). Unlit bars stay faintly visible, like LCD segments.
 - **Keyboard:** the number pad types a frequency straight away; Backspace works like CLR.
 - **Help overlay:** labels now name the new functions, with a short legend for the function keys.
 - **Host fix:** on the machine hosting a game, the power knob used to flip twice and do nothing; it now
@@ -126,6 +131,7 @@ code is used.
 | Underwater: radios dead, voices muffled | No | **Not ported** (needs an in-game check of Reforger's water API) |
 | Separate crew and passenger intercom channels | Passengers on/off only | **Not ported** |
 | Transmit power setting (ACRE, RHS) | No | Added (LOW / MED / HIGH) |
+| Signal strength on the radio | No | Added (RX bars, TX power bars) |
 | Diver radio | No | **Not ported** (no diving gear in our modset) |
 
 ## What was tested, and what wasn't
@@ -136,9 +142,9 @@ code is used.
 - Muted off-screen game self-test (48 checks, all passed): plugin version rules, defaults, 5 kHz
   frequencies, monitor channel routing rules, ear cycling, respawn keys, settings kept through death,
   voice directivity, terrain sampling, and the incoming-call pop-up text.
-- Keypad, display and TX power: muted off-screen self-test, 139 checks, all passed (every PRC-152 key on
+- Keypad, display, TX power and signal bars: muted off-screen self-test, 152 checks, all passed (every PRC-152 key on
   the home, OPT, edit and PGM screens, number pad and Backspace, power, the frequency reaching the server,
-  TX power LOW / MED / HIGH and the range each gives,
+  TX power LOW / MED / HIGH and the range each gives, the R / T marker and bars for a call and a transmission,
   and the VOL keys, options and help legend on the other four radios). Screenshots of every radio's home
   screen, help overlay and backlight, plus the PRC-152 OPT and PGM screens, checked by eye.
 - **Not tested here (needs players and TeamSpeak):** hearing the monitored net, the pop-up during a real

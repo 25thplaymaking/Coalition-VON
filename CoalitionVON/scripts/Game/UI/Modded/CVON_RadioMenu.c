@@ -55,6 +55,7 @@ class CVON_RadioMenu: MenuBase
 	static const int OPTION_COUNT = 7;
 	static const int CLOCK_LIMIT = 99;			//clock offset range, minutes either way
 	static const int LAST_CHANNEL = 99;
+	static const int BAR_COUNT = 5;				//signal bars on the display
 
 	//Backlight: one setting for every radio, like leaving the light switched on
 	static bool s_bBacklight = false;
@@ -76,6 +77,13 @@ class CVON_RadioMenu: MenuBase
 	TextWidget m_wInfo;
 	ImageWidget m_wGlow;
 	ImageWidget m_wKnobWidget;
+
+	//TX / RX marker and signal bars: lit bars use the display's ink, unlit ones a faint trace of it
+	TextWidget m_wLink;
+	ref array<ImageWidget> m_aBars = {};
+	ref Color m_BarLit;
+	ref Color m_BarDim;
+	SCR_VONController m_VONController;
 
 	Widget m_wHelpFrame;
 	SCR_ButtonComponent m_wHelpButton;
@@ -142,6 +150,27 @@ class CVON_RadioMenu: MenuBase
 		m_wInfo = TextWidget.Cast(m_wRoot.FindAnyWidget("LcdInfo"));
 		m_wGlow = ImageWidget.Cast(m_wRoot.FindAnyWidget("LcdGlow"));
 		m_wKnobWidget = ImageWidget.Cast(m_wRoot.FindAnyWidget("Knob"));
+
+		m_wLink = TextWidget.Cast(m_wRoot.FindAnyWidget("LcdLink"));
+		for (int bar = 0; bar < BAR_COUNT; bar++)
+		{
+			ImageWidget barWidget = ImageWidget.Cast(m_wRoot.FindAnyWidget("LcdBar" + bar.ToString()));
+			if (barWidget)
+				m_aBars.Insert(barWidget);
+		}
+		if (!m_aBars.IsEmpty())
+		{
+			Color ink = m_aBars[0].GetColor();
+			m_BarLit = new Color(ink.R(), ink.G(), ink.B(), ink.A());
+			//Dark ink is an LCD, whose unlit segments stay faintly visible; bright ink is a glowing display
+			//(the R-168), where they almost vanish
+			float unlit = 0.14;
+			if (ink.R() + ink.G() + ink.B() > 1.5)
+				unlit = 0.06;
+			m_BarDim = new Color(ink.R(), ink.G(), ink.B(), ink.A() * unlit);
+		}
+		if (m_PlayerController)
+			m_VONController = SCR_VONController.Cast(m_PlayerController.FindComponent(SCR_VONController));
 
 		Widget helpButton = m_wRoot.FindAnyWidget("HelpButton");
 		if (helpButton)
@@ -807,7 +836,10 @@ class CVON_RadioMenu: MenuBase
 		SetLine(m_wMain, on, "");
 		SetLine(m_wInfo, on, "");
 		if (!on)
+		{
+			RefreshLink(false);
 			return;
+		}
 
 		string status, statusRight, name, mainText, info;
 		switch (m_eScreen)
@@ -872,6 +904,59 @@ class CVON_RadioMenu: MenuBase
 		SetLine(m_wName, true, name);
 		SetLine(m_wMain, true, mainText);
 		SetLine(m_wInfo, true, info);
+		RefreshLink(true);
+	}
+
+	//T while this radio transmits (bars = power setting), R while it hears a call (bars = signal strength)
+	void RefreshLink(bool on)
+	{
+		bool transmitting;
+		float quality;
+		bool active = on && m_VONController && m_VONController.GetRadioLink(m_RadioComponent, transmitting, quality);
+		string marker = "";
+		int lit = 0;
+		if (active)
+		{
+			if (transmitting)
+			{
+				marker = "T";
+				lit = TxPowerBars(m_RadioComponent.m_iTxPower);
+			}
+			else
+			{
+				marker = "R";
+				lit = SignalBars(quality);
+			}
+		}
+		SetLine(m_wLink, on, marker);
+		for (int bar = 0; bar < m_aBars.Count(); bar++)
+		{
+			m_aBars[bar].SetVisible(on);
+			if (bar < lit)
+				m_aBars[bar].SetColor(m_BarLit);
+			else
+				m_aBars[bar].SetColor(m_BarDim);
+		}
+	}
+
+	//Signal strength 0..1 -> lit bars (any signal at all lights one)
+	static int SignalBars(float quality)
+	{
+		if (quality <= 0)
+			return 0;
+		int bars = Math.Ceil(quality * BAR_COUNT);
+		return Math.ClampInt(bars, 1, BAR_COUNT);
+	}
+
+	//While transmitting the bars show the power setting
+	static int TxPowerBars(int power)
+	{
+		switch (power)
+		{
+			case CVON_ETxPower.LOW: {return 2;}
+			case CVON_ETxPower.MEDIUM: {return 3;}
+		}
+		return BAR_COUNT;
 	}
 
 	//"OPT 2/6"

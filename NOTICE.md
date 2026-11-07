@@ -40,6 +40,7 @@ Coalition VON on a server: do not load both.
 - Radio keypads and displays rebuilt to work like the real radios (presets, OPT and PGM menus,
   backlight, volume keys, four-line display), net names on channels, and a new radio pop-up.
 - Transmit power LOW / MED / HIGH on every radio, changing how far calls reach.
+- TX / RX marker and signal-strength bars on the radio displays.
 
 See [docs/BIFROST_CHANGES.md](docs/BIFROST_CHANGES.md) for details and the TFAR comparison.
 

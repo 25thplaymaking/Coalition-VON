@@ -1062,6 +1062,38 @@ modded class SCR_VONController
 		return false;
 	}
 
+	//Radio display (TX / RX marker and signal bars): is this radio transmitting (outTransmitting) or hearing a
+	//call, and how strong the strongest incoming signal is (0..1, the same value the plugin turns into
+	//static). False when the radio is idle.
+	bool GetRadioLink(CVON_RadioComponent radio, out bool outTransmitting, out float outQuality)
+	{
+		outTransmitting = false;
+		outQuality = 0;
+		if (!radio || !m_PlayerController)
+			return false;
+
+		if (m_bIsBroadcasting && m_CurrentVONContainer && m_CurrentVONContainer.m_eVonType == CVON_EVONType.RADIO && m_CurrentVONContainer.m_iRadioId == radio.GetRplId())
+		{
+			outTransmitting = true;
+			return true;
+		}
+
+		bool receiving = false;
+		foreach (int talker, CVON_VONContainer call: m_PlayerController.m_aLocalEntries)
+		{
+			if (!call || call.m_eVonType != CVON_EVONType.RADIO)
+				continue;
+			CVON_RadioComponent hearing;
+			int channel;
+			CVON_EStereo ear;
+			if (!FindReceivingRadio(call, hearing, channel, ear) || hearing != radio)
+				continue;
+			receiving = true;
+			outQuality = Math.Max(outQuality, call.m_fConnectionQuality);
+		}
+		return receiving;
+	}
+
 	//Entries the server adds and removes (radio transmissions, and those heard through a vehicle speaker)
 	static bool IsServerManaged(CVON_VONContainer container)
 	{

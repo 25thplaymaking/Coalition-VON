@@ -125,6 +125,104 @@ FrameWidgetClass {
     Font "{D3E3853DAEBA9BD6}UI/fonts/DS_DIGI.fnt"
    }
   }
+  TextWidgetClass "{6DB77A48C7DDF04A}" {
+   Name "LcdLink"
+   Slot FrameWidgetSlot "{6D4FC120EE74819E}" {
+    Anchor 0.5 0.5 0.5 0.5
+    PositionX 61
+    OffsetLeft 61
+    PositionY -95
+    OffsetTop -95
+    SizeX 16
+    OffsetRight -77
+    SizeY 20
+    OffsetBottom 75
+   }
+   Color 1 0.7768 0.1167 1
+   Text ""
+   "Font Size" 20
+   "Min Font Size" 14
+   "Horizontal Alignment" Left
+   "Vertical Alignment" Center
+   FontProperties FontProperties "{6D296528570F1B58}" {
+    Font "{D3E3853DAEBA9BD6}UI/fonts/DS_DIGI.fnt"
+   }
+  }
+  ImageWidgetClass "{6DB2537D776781D8}" {
+   Name "LcdBar0"
+   Slot FrameWidgetSlot "{6DD5A4CC633DCD14}" {
+    Anchor 0.5 0.5 0.5 0.5
+    PositionX 79
+    OffsetLeft 79
+    PositionY -83
+    OffsetTop -83
+    SizeX 4
+    OffsetRight -83
+    SizeY 8
+    OffsetBottom 75
+   }
+   Color 1 0.7768 0.1167 1
+  }
+  ImageWidgetClass "{6DB054BCE645C8B5}" {
+   Name "LcdBar1"
+   Slot FrameWidgetSlot "{6DC2240CAB5AB2AD}" {
+    Anchor 0.5 0.5 0.5 0.5
+    PositionX 85
+    OffsetLeft 85
+    PositionY -86
+    OffsetTop -86
+    SizeX 4
+    OffsetRight -89
+    SizeY 11
+    OffsetBottom 75
+   }
+   Color 1 0.7768 0.1167 1
+  }
+  ImageWidgetClass "{6D090E7573CFBC06}" {
+   Name "LcdBar2"
+   Slot FrameWidgetSlot "{6D225913A6A8D28A}" {
+    Anchor 0.5 0.5 0.5 0.5
+    PositionX 91
+    OffsetLeft 91
+    PositionY -89
+    OffsetTop -89
+    SizeX 4
+    OffsetRight -95
+    SizeY 14
+    OffsetBottom 75
+   }
+   Color 1 0.7768 0.1167 1
+  }
+  ImageWidgetClass "{6D4630542BB87C98}" {
+   Name "LcdBar3"
+   Slot FrameWidgetSlot "{6D3060F1290730DF}" {
+    Anchor 0.5 0.5 0.5 0.5
+    PositionX 97
+    OffsetLeft 97
+    PositionY -92
+    OffsetTop -92
+    SizeX 4
+    OffsetRight -101
+    SizeY 17
+    OffsetBottom 75
+   }
+   Color 1 0.7768 0.1167 1
+  }
+  ImageWidgetClass "{6DC48A1F2843AA54}" {
+   Name "LcdBar4"
+   Slot FrameWidgetSlot "{6D70BC4E461302A5}" {
+    Anchor 0.5 0.5 0.5 0.5
+    PositionX 103
+    OffsetLeft 103
+    PositionY -95
+    OffsetTop -95
+    SizeX 4
+    OffsetRight -107
+    SizeY 20
+    OffsetBottom 75
+   }
+   Color 1 0.7768 0.1167 1
+  }
   ButtonWidgetClass "{663ED4C1BBB6E74A}" {
    Name "Button1"
    Slot FrameWidgetSlot "{662A44765E14B87A}" {
@@ -593,7 +691,7 @@ FrameWidgetClass {
      }
      Text "Next channel"
      "Horizontal Alignment" Right
-     FontProperties FontProperties "{6D770D83ED0D7527}" {
+     FontProperties FontProperties "{6DBB430F79ACA9A9}" {
       Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
       ShadowSize 4
       ShadowOffset 0 0
@@ -629,7 +727,7 @@ FrameWidgetClass {
      }
      Text "Prev channel"
      "Horizontal Alignment" Right
-     FontProperties FontProperties "{6DEF34DD85BAC630}" {
+     FontProperties FontProperties "{6DF46FBCAC93C01C}" {
       Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
       ShadowSize 4
       ShadowOffset 0 0
@@ -651,7 +749,7 @@ FrameWidgetClass {
      }
      Text "Options"
      "Horizontal Alignment" Right
-     FontProperties FontProperties "{6D600A1371F058E0}" {
+     FontProperties FontProperties "{6DED3BE0410AD224}" {
       Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
       ShadowSize 4
       ShadowOffset 0 0
@@ -673,7 +771,7 @@ FrameWidgetClass {
      }
      Text "Clear / back"
      "Horizontal Alignment" Center
-     FontProperties FontProperties "{6DFA37ED8125DDD2}" {
+     FontProperties FontProperties "{6D8E3287C88B9774}" {
       Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
       ShadowSize 4
       ShadowOffset 0 0
@@ -695,7 +793,7 @@ FrameWidgetClass {
      }
      Text "Store"
      "Horizontal Alignment" Center
-     FontProperties FontProperties "{6D04075C7B6ABE7F}" {
+     FontProperties FontProperties "{6DDA2949F4A7DE56}" {
       Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
       ShadowSize 4
       ShadowOffset 0 0
@@ -717,7 +815,7 @@ FrameWidgetClass {
      }
      Text "Options"
      "Horizontal Alignment" Left
-     FontProperties FontProperties "{6DF15C49346C38AC}" {
+     FontProperties FontProperties "{6D66A9093620182A}" {
       Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
       ShadowSize 4
       ShadowOffset 0 0
@@ -739,7 +837,7 @@ FrameWidgetClass {
      }
      Text "Power on / off"
      "Horizontal Alignment" Right
-     FontProperties FontProperties "{6D2AC626994F5E4C}" {
+     FontProperties FontProperties "{6D858498514FEB18}" {
       Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
       ShadowSize 4
       ShadowOffset 0 0
