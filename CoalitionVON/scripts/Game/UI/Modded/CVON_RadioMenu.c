@@ -14,6 +14,8 @@ enum CVON_ERadioMenu
 	FREQ,
 	VOL,
 	STEREO,
+	MONITOR,		//second channel heard at the same time (CVON_RadioComponent.m_iMonitorChannel)
+	MONITOR_EAR,	//...and its ear
 	TIME
 }
 
@@ -185,7 +187,7 @@ class CVON_RadioMenu: MenuBase
 		
 		if (m_ERadioMenu == 0)
 		{
-			m_ERadioMenu = 3;
+			m_ERadioMenu = CVON_ERadioMenu.TIME;
 			LoadNewMenu();
 			return;
 		}
@@ -201,7 +203,7 @@ class CVON_RadioMenu: MenuBase
 		if (!m_RadioComponent.m_bPower)
 			return;
 		
-		if (m_ERadioMenu == 3)
+		if (m_ERadioMenu == CVON_ERadioMenu.TIME)
 		{
 			m_ERadioMenu = 0;
 			LoadNewMenu();
@@ -236,6 +238,16 @@ class CVON_RadioMenu: MenuBase
 				ChangeStereo(1);
 				break;
 			}
+			case CVON_ERadioMenu.MONITOR:
+			{
+				ChangeMonitorChannel(1);
+				break;
+			}
+			case CVON_ERadioMenu.MONITOR_EAR:
+			{
+				ChangeMonitorStereo(1);
+				break;
+			}
 			case CVON_ERadioMenu.TIME:
 			{
 				m_RadioComponent.m_iTimeDeviation += 1;
@@ -267,6 +279,16 @@ class CVON_RadioMenu: MenuBase
 			case CVON_ERadioMenu.STEREO:
 			{
 				ChangeStereo(-1);
+				break;
+			}
+			case CVON_ERadioMenu.MONITOR:
+			{
+				ChangeMonitorChannel(-1);
+				break;
+			}
+			case CVON_ERadioMenu.MONITOR_EAR:
+			{
+				ChangeMonitorStereo(-1);
 				break;
 			}
 			case CVON_ERadioMenu.TIME:
@@ -338,54 +360,69 @@ class CVON_RadioMenu: MenuBase
 		#endif
 	}
 	
+	//Both, Right, Left, round and round. Ears are saved for respawn every time (the wrap-arounds used to
+	//skip that, so Left or Both chosen by wrapping came back as something else after respawning).
+	static CVON_EStereo NextStereo(CVON_EStereo current, int input)
+	{
+		int next = (current + input) % 3;
+		if (next < 0)
+			next += 3;
+		return next;
+	}
+
 	//Changes the stereo settings based on the input from the MenuUp and Down methods
 	//==========================================================================================================================================================================
 	void ChangeStereo(int input)
 	{
-		if (m_RadioComponent.m_eStereo == 0 && input == -1)
-		{
-			m_RadioComponent.m_eStereo = 2;
-			m_RadioComponent.WriteJSON(SCR_PlayerController.GetLocalControlledEntity());
-			LoadStereoMenu();
-			return;
-		}
-		else if (m_RadioComponent.m_eStereo == 2 && input == 1)
-		{
-			m_RadioComponent.m_eStereo = 0;
-			m_RadioComponent.WriteJSON(SCR_PlayerController.GetLocalControlledEntity());
-			LoadStereoMenu();
-			return;
-		}
-		
-		m_RadioComponent.m_eStereo += input;
+		m_RadioComponent.m_eStereo = NextStereo(m_RadioComponent.m_eStereo, input);
 		m_RadioComponent.WriteJSON(SCR_PlayerController.GetLocalControlledEntity());
 		m_PlayerController.UpdateSettings();
 		LoadStereoMenu();
 	}
-	
+
 	//Changes the volume based on the input from the MenuUp and Down methods
 	//==========================================================================================================================================================================
 	void ChangeVolume(int input)
 	{
-		if (m_RadioComponent.m_iVolume == 0 && input == -1)
-		{
-			m_RadioComponent.m_iVolume = 9;
-			m_RadioComponent.WriteJSON(SCR_PlayerController.GetLocalControlledEntity());
-			LoadVolumeMenu();
-			return;
-		}
-		else if (m_RadioComponent.m_iVolume == 9 && input == 1)
-		{
-			m_RadioComponent.m_iVolume = 0;
-			m_RadioComponent.WriteJSON(SCR_PlayerController.GetLocalControlledEntity());
-			LoadVolumeMenu();
-			return;
-		}
-		
-		m_RadioComponent.m_iVolume += input;
+		int volume = (m_RadioComponent.m_iVolume + input) % 10;
+		if (volume < 0)
+			volume += 10;
+		m_RadioComponent.m_iVolume = volume;
 		m_RadioComponent.WriteJSON(SCR_PlayerController.GetLocalControlledEntity());
 		m_PlayerController.UpdateSettings();
 		LoadVolumeMenu();
+	}
+
+	//Monitor: Off, then each channel except the one the radio is on
+	//==========================================================================================================================================================================
+	void ChangeMonitorChannel(int input)
+	{
+		int channelCount = m_RadioComponent.m_aChannels.Count();
+		if (channelCount < 2)
+		{
+			LoadMonitorMenu();
+			return;
+		}
+
+		int monitor = m_RadioComponent.m_iMonitorChannel;
+		for (int i = 0; i <= channelCount; i++)
+		{
+			monitor = (monitor + input) % (channelCount + 1);
+			if (monitor < 0)
+				monitor += channelCount + 1;
+			if (monitor != m_RadioComponent.m_iCurrentChannel)
+				break;
+		}
+		m_RadioComponent.SetMonitorChannelClient(monitor);
+		LoadMonitorMenu();
+	}
+
+	void ChangeMonitorStereo(int input)
+	{
+		m_RadioComponent.m_eMonitorStereo = NextStereo(m_RadioComponent.m_eMonitorStereo, input);
+		m_RadioComponent.WriteJSON(SCR_PlayerController.GetLocalControlledEntity());
+		m_PlayerController.UpdateSettings();
+		LoadMonitorEarMenu();
 	}
 	
 	
@@ -398,8 +435,40 @@ class CVON_RadioMenu: MenuBase
 			case CVON_ERadioMenu.FREQ: {LoadFrequencyMenu(m_RadioComponent.m_iCurrentChannel); break;}
 			case CVON_ERadioMenu.VOL: {LoadVolumeMenu(); break;}
 			case CVON_ERadioMenu.STEREO: {LoadStereoMenu(); break;}
+			case CVON_ERadioMenu.MONITOR: {LoadMonitorMenu(); break;}
+			case CVON_ERadioMenu.MONITOR_EAR: {LoadMonitorEarMenu(); break;}
 			case CVON_ERadioMenu.TIME: {LoadTimeMenu(); break;}
 		}
+	}
+
+	static string StereoText(CVON_EStereo stereo)
+	{
+		switch (stereo)
+		{
+			case CVON_EStereo.RIGHT: {return "Right";}
+			case CVON_EStereo.LEFT: {return "Left";}
+		}
+		return "Both";
+	}
+
+	//==========================================================================================================================================================================
+	void LoadMonitorMenu()
+	{
+		m_wLine1.SetText("Monitor");
+		string monitorFreq = m_RadioComponent.GetMonitorFrequency();
+		if (monitorFreq == "")
+			m_wLine2.SetText("Off");
+		else
+			m_wLine2.SetText(PrepFinalFreq(monitorFreq, m_RadioComponent.m_iMonitorChannel));
+		m_wLine3.SetVisible(false);
+	}
+
+	//==========================================================================================================================================================================
+	void LoadMonitorEarMenu()
+	{
+		m_wLine1.SetText("Monitor Ear");
+		m_wLine2.SetText(StereoText(m_RadioComponent.m_eMonitorStereo));
+		m_wLine3.SetVisible(false);
 	}
 	
 	//Used when we need to shift to a new channel
@@ -493,7 +562,7 @@ class CVON_RadioMenu: MenuBase
 		if (m_ERadioMenu != CVON_ERadioMenu.FREQ)
 			return;
 		int tempFreq = m_sTempFrequency.ToInt();
-		if (tempFreq < 30000 || tempFreq > 87975 || tempFreq % 25 != 0)
+		if (!m_RadioComponent.IsValidFrequency(tempFreq))
 		{
 			m_wLine2.SetText(PrepFinalFreq(tempFreq.ToString(), m_RadioComponent.m_iCurrentChannel));
 			m_sTempFrequency = "_____";

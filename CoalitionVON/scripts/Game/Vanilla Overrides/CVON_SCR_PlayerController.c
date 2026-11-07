@@ -3,6 +3,12 @@ class CVON_RadioSettingObject
 	string m_sFreq = "";
 	CVON_EStereo m_Stereo = CVON_EStereo.BOTH;
 	int m_iVolume = 9;
+	//Which radio this was: its name and how many of that name came before it ("AN/PRC-152#0"), so ears and
+	//volumes go back on the same kind of radio after a respawn, whatever order the new radios are listed in
+	string m_sKey = "";
+	//The monitored channel's frequency and its ear (CVON_RadioComponent.m_iMonitorChannel), "" for none
+	string m_sMonitorFreq = "";
+	CVON_EStereo m_MonitorStereo = CVON_EStereo.BOTH;
 }
 
 modded class SCR_PlayerController
@@ -116,14 +122,26 @@ modded class SCR_PlayerController
 		super.OnControlledEntityChanged(from, to);
 		if (!CVON_VONGameModeComponent.GetInstance())
 			return;
-		UpdateSettings();
+		//Save the radios of the character we're leaving: alive or dead its radios are still on it. Saving
+		//against the new entity (as before) matched none of them and wiped the settings at every death, so
+		//nothing came back on respawn. Leaving nothing (respawning after death) keeps what was saved then.
+		if (from)
+			UpdateSettings(from);
 
 		GetGame().GetCallqueue().CallLater(InitializeRadios, 500, false, to);
 	}
 
-	void UpdateSettings()
+	//owner: whose radios m_aRadios holds (default: the character we control). No owner (dead, spectating):
+	//nothing to save, and the last saved settings are kept for the respawn.
+	void UpdateSettings(IEntity owner = null)
 	{
+		if (!owner)
+			owner = GetControlledEntity();
+		if (!owner)
+			return;
+
 		m_aRadioSettings.Clear();
+		map<string, int> nameCounts = new map<string, int>();
 		foreach (IEntity radio: m_aRadios)
 		{
 			if (!radio)
@@ -132,16 +150,69 @@ modded class SCR_PlayerController
 			if (!radioComp)
 				continue;
 			//Settings restore our own radios on respawn: not a vehicle radio or someone's handset
-			if (radioComp.GetCarrier() != GetControlledEntity())
+			if (radioComp.GetCarrier() != owner)
 				continue;
 			SCR_FactionManager factionMan = SCR_FactionManager.Cast(GetGame().GetFactionManager());
-			if (radioComp.m_sFactionKey != "" && radioComp.m_sFactionKey != factionMan.GetPlayerFaction(GetPlayerId()).GetFactionKey())
+			Faction playerFaction;
+			if (factionMan)
+				playerFaction = factionMan.GetPlayerFaction(GetPlayerId());
+			if (radioComp.m_sFactionKey != "" && playerFaction && radioComp.m_sFactionKey != playerFaction.GetFactionKey())
 				continue;
 			ref CVON_RadioSettingObject setting = new CVON_RadioSettingObject();
 			setting.m_sFreq = radioComp.m_sFrequency;
 			setting.m_Stereo = radioComp.m_eStereo;
 			setting.m_iVolume = radioComp.m_iVolume;
+			setting.m_sKey = RadioSettingKey(radioComp, nameCounts);
+			setting.m_sMonitorFreq = radioComp.GetMonitorFrequency();
+			setting.m_MonitorStereo = radioComp.m_eMonitorStereo;
 			m_aRadioSettings.Insert(setting);
+		}
+	}
+
+	//"<radio name>#<how many of that name came before it>"
+	static string RadioSettingKey(CVON_RadioComponent radioComp, map<string, int> nameCounts)
+	{
+		int seen = 0;
+		nameCounts.Find(radioComp.m_sRadioName, seen);
+		nameCounts.Set(radioComp.m_sRadioName, seen + 1);
+		return radioComp.m_sRadioName + "#" + seen.ToString();
+	}
+
+	//Local: put saved ears, volumes and monitored channels back on our new radios (after a respawn)
+	protected void RestoreLocalRadioSettings()
+	{
+		if (m_aRadioSettings.IsEmpty())
+			return;
+
+		map<string, ref CVON_RadioSettingObject> byKey = new map<string, ref CVON_RadioSettingObject>();
+		foreach (CVON_RadioSettingObject saved: m_aRadioSettings)
+		{
+			if (saved.m_sKey != "")
+				byKey.Set(saved.m_sKey, saved);
+		}
+
+		map<string, int> nameCounts = new map<string, int>();
+		foreach (IEntity radio: m_aRadios)
+		{
+			if (!radio)
+				continue;
+			CVON_RadioComponent radioComp = CVON_RadioComponent.Cast(radio.FindComponent(CVON_RadioComponent));
+			if (!radioComp || radioComp.GetCarrier() != GetControlledEntity())
+				continue;
+
+			CVON_RadioSettingObject setting;
+			if (!byKey.Find(RadioSettingKey(radioComp, nameCounts), setting))
+				continue;
+
+			radioComp.m_iVolume = setting.m_iVolume;
+			radioComp.m_eStereo = setting.m_Stereo;
+			radioComp.m_eMonitorStereo = setting.m_MonitorStereo;
+			//The monitored net comes back if the new radio has it on one of its channels
+			int monitorChannel = 0;
+			if (setting.m_sMonitorFreq != "")
+				monitorChannel = radioComp.m_aChannels.Find(setting.m_sMonitorFreq) + 1;
+			if (monitorChannel != radioComp.m_iMonitorChannel)
+				radioComp.SetMonitorChannelClient(monitorChannel, false);
 		}
 	}
 
@@ -200,13 +271,13 @@ modded class SCR_PlayerController
 			m_HandsetRadio = radioEntity;
 			if (!m_aRadios.Contains(radioEntity))
 				m_aRadios.Insert(radioEntity);
-			SCR_HintManagerComponent.ShowCustomHint("Holding the " + radio.m_sRadioName + " handset. It's on your radio keys after your own radios.", "Coalition VON", 4);
+			SCR_HintManagerComponent.ShowCustomHint("Holding the " + radio.m_sRadioName + " handset. It's on your radio keys after your own radios.", "Bifrost VON", 4);
 		}
 		else if (!holding && m_HandsetRadio == radioEntity)
 		{
 			m_aRadios.RemoveItemOrdered(radioEntity);
 			m_HandsetRadio = null;
-			SCR_HintManagerComponent.ShowCustomHint("Handset released", "Coalition VON", 2);
+			SCR_HintManagerComponent.ShowCustomHint("Handset released", "Bifrost VON", 2);
 		}
 		else
 		{
@@ -290,9 +361,12 @@ modded class SCR_PlayerController
 		m_VehicleRadio = radioEntity;
 
 		//A radio with no key at all (vehicle without a faction) has no traffic to keep: fill it straight away.
-		//Otherwise it stays on its key until a crew member fills it (VONVehicleKeyFill keybind).
+		//Otherwise, crew comms style, it takes our key when we get in (unless other crew are on its key);
+		//with that off it stays on its key until a crew member fills it (VONVehicleKeyFill keybind).
 		if (newRadio && radio.m_sFactionKey == "")
 			KeyFillVehicleRadio(radio.GetRplId());
+		else if (newRadio && radio.WouldAutoFill(character))
+			KeyFillVehicleRadio(radio.GetRplId(), true);
 
 		//RadioData.json and the server's frequency index follow the new radio list
 		if (character)
@@ -301,13 +375,13 @@ modded class SCR_PlayerController
 
 	//Crew only: load our encryption key and channels into the vehicle radio (CVON_VehicleRadioComponent.KeyFillFromCrew)
 	//==========================================================================================================================================================================
-	void KeyFillVehicleRadio(RplId radioId)
+	void KeyFillVehicleRadio(RplId radioId, bool automatic = false)
 	{
-		Rpc(RpcAsk_KeyFillVehicleRadio, radioId);
+		Rpc(RpcAsk_KeyFillVehicleRadio, radioId, automatic);
 	}
 
 	[RplRpc(RplChannel.Reliable, RplRcver.Server)]
-	void RpcAsk_KeyFillVehicleRadio(RplId radioId)
+	void RpcAsk_KeyFillVehicleRadio(RplId radioId, bool automatic)
 	{
 		CVON_VehicleRadioComponent radio = CVON_VehicleRadioComponent.Cast(FindRadioComponent(radioId));
 		if (!radio)
@@ -315,6 +389,9 @@ modded class SCR_PlayerController
 
 		IEntity player = GetControlledEntity();
 		if (CVON_VehicleComms.GetOperatedRadio(player) != radio)
+			return;
+		//Getting in: only when the server agrees (setting on, nobody else in a crew seat on the radio's key)
+		if (automatic && !radio.WouldAutoFill(player))
 			return;
 		radio.KeyFillFromCrew(player);
 	}
@@ -418,39 +495,29 @@ modded class SCR_PlayerController
 		CVON_RadioComponent radioComp = CVON_RadioComponent.Cast(radioEntity.FindComponent(CVON_RadioComponent));
 		if (!radioComp)
 			return;
-		if (GetGame().GetPlayerController())
+		int count = m_aRadios.Count();
+		if (count >= 2)
 		{
-			radioComp.WriteJSON(to);
-			if (m_aRadioSettings.Count() > 0)
+			for (int i = 0; i < m_iAmountOfTimesRadioRotated - 1; i++)
 			{
-				foreach (IEntity radio: m_aRadios)
-				{
-					CVON_RadioComponent radioCompSetting = CVON_RadioComponent.Cast(radio.FindComponent(CVON_RadioComponent));
-					int index = m_aRadios.Find(radio);
-					if (m_aRadioSettings.Count() <= index)
-						break;
-					CVON_RadioSettingObject radioSetting = m_aRadioSettings.Get(index);
+				IEntity last = m_aRadios[count - 1];
 
-					radioCompSetting.m_iVolume = radioSetting.m_iVolume;
-					radioCompSetting.m_eStereo = radioSetting.m_Stereo;
-				}
+			    for (int g = count - 1; g > 0; g--)
+			    {
+			        m_aRadios[g] = m_aRadios[g - 1];
+			    }
+			    m_aRadios[0] = last;
 			}
 		}
 
-		int count = m_aRadios.Count();
-		if (count < 2) return;
-
-		for (int i = 0; i < m_iAmountOfTimesRadioRotated - 1; i++)
+		//Our own radios only. Ears and volumes used to be put back by list position before the radios were
+		//rotated, and RadioData.json was written before that, so after a respawn they could land on the
+		//wrong radio and the plugin kept the default ears until something else rewrote the file.
+		if (this == GetGame().GetPlayerController())
 		{
-			IEntity last = m_aRadios[count - 1];
-
-		    for (int g = count - 1; g > 0; g--)
-		    {
-		        m_aRadios[g] = m_aRadios[g - 1];
-		    }
-		    m_aRadios[0] = last;
+			RestoreLocalRadioSettings();
+			radioComp.WriteJSON(to);
 		}
-
 	}
 
 	//mmmmgetter
@@ -681,6 +748,23 @@ modded class SCR_PlayerController
 		radioComp.UpdateTimeDeviationServer(input);
 	}
 
+	//Monitor channel (CVON_RadioComponent.m_iMonitorChannel)
+	//==========================================================================================================================================================================
+	void UpdateRadioMonitorChannel(int channel, RplId radio)
+	{
+		Rpc(RpcAsk_UpdateRadioMonitorChannel, channel, radio);
+	}
+
+	[RplRpc(RplChannel.Reliable, RplRcver.Server)]
+	void RpcAsk_UpdateRadioMonitorChannel(int channel, RplId radio)
+	{
+		CVON_RadioComponent radioComp = FindRadioComponent(radio);
+		if (!radioComp)
+			return;
+
+		radioComp.UpdateMonitorChannelServer(channel);
+	}
+
 	//==========================================================================================================================================================================
 	void AddChannelServer(RplId radioId)
 	{
@@ -713,7 +797,11 @@ modded class SCR_PlayerController
 	[RplRpc(RplChannel.Reliable, RplRcver.Owner)]
 	void RpcDo_SetVolumeFromServer(int volume, int radioIndex)
 	{
+		if (radioIndex < 0 || radioIndex >= m_aRadios.Count() || !m_aRadios.Get(radioIndex))
+			return;
 		CVON_RadioComponent radioComp = CVON_RadioComponent.Cast(m_aRadios.Get(radioIndex).FindComponent(CVON_RadioComponent));
+		if (!radioComp)
+			return;
 		radioComp.m_iVolume = volume;
 		radioComp.WriteJSON(GetLocalControlledEntity());
 	}
@@ -726,7 +814,11 @@ modded class SCR_PlayerController
 	[RplRpc(RplChannel.Reliable, RplRcver.Owner)]
 	void RpcDo_SetStereoFromServer(CVON_EStereo stereo, int radioIndex)
 	{
+		if (radioIndex < 0 || radioIndex >= m_aRadios.Count() || !m_aRadios.Get(radioIndex))
+			return;
 		CVON_RadioComponent radioComp = CVON_RadioComponent.Cast(m_aRadios.Get(radioIndex).FindComponent(CVON_RadioComponent));
+		if (!radioComp)
+			return;
 		radioComp.m_eStereo = stereo;
 		radioComp.WriteJSON(GetLocalControlledEntity());
 	}

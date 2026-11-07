@@ -48,6 +48,11 @@ class CVON_VONContainer
 	
 	//How strong the connection quality is
 	float m_fConnectionQuality;
+
+	//Radio calls: metres of terrain above the straight line between sender and our radios, and when to
+	//sample it again (SCR_VONController.TerrainObstruction). Listener only, not replicated.
+	float m_fTerrainObstruction = 0;
+	float m_fNextTerrainTime = 0;
 	
 	//Where the source of this entry is if we can find it.
 	IEntity m_SoundSource;

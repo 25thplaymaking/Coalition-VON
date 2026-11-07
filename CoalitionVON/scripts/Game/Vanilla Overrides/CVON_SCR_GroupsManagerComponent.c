@@ -65,7 +65,12 @@ modded class SCR_GroupsManagerComponent
 		{
 			foreach (IEntity radio: playerController.m_aRadios)
 			{
+				//A radio dropped or deleted since the list was built
+				if (!radio)
+					continue;
 				CVON_RadioComponent radioComp = CVON_RadioComponent.Cast(radio.FindComponent(CVON_RadioComponent));
+				if (!radioComp)
+					continue;
 				int index = playerController.m_aRadios.Find(radio);
 				if (playerController.m_aRadioSettings.Count() <= index)
 					break;
@@ -85,8 +90,12 @@ modded class SCR_GroupsManagerComponent
 		}
 		
 		SCR_Faction playerFaction = SCR_Faction.Cast(SCR_FactionManager.Cast(GetGame().GetFactionManager()).GetPlayerFaction(playerId));
-		
+		if (!playerFaction)
+			return;
+
 		array<SCR_AIGroup> groups = GetPlayableGroupsByFaction(playerFaction);
+		if (!groups)
+			return;
 		SCR_AIGroup playersGroup = GetPlayerGroup(playerId);
 		int index = groups.Find(playersGroup);
 		if (index == -1)
@@ -117,7 +126,12 @@ modded class SCR_GroupsManagerComponent
 				}
 			}
 		}
-		foreach (CVON_GroupFrequencyContainer container: playerFaction.GetCallsignInfo().m_aGroupFrequencyOverrides)
+		array<ref CVON_GroupFrequencyContainer> factionOverrides;
+		if (playerFaction.GetCallsignInfo())
+			factionOverrides = playerFaction.GetCallsignInfo().m_aGroupFrequencyOverrides;
+		if (!factionOverrides)
+			factionOverrides = {};
+		foreach (CVON_GroupFrequencyContainer container: factionOverrides)
 		{
 			foreach (string groupName: container.m_aGroupNames)
 			{
@@ -133,7 +147,12 @@ modded class SCR_GroupsManagerComponent
 			if (radiosDone.Contains(playerController.m_aRadios.Get(i)))
 				continue;
 			bool m_bFrequencyFound = false;
-			CVON_RadioComponent radioComp = CVON_RadioComponent.Cast(playerController.m_aRadios.Get(i).FindComponent(CVON_RadioComponent));
+			IEntity radioEntity = playerController.m_aRadios.Get(i);
+			if (!radioEntity)
+				continue;
+			CVON_RadioComponent radioComp = CVON_RadioComponent.Cast(radioEntity.FindComponent(CVON_RadioComponent));
+			if (!radioComp)
+				continue;
 			if (!freqContainer)
 			{
 				radioComp.UpdateChannelServer(1);
@@ -198,14 +217,18 @@ modded class SCR_GroupsManagerComponent
 		
 		if (playerController.m_aRadioSettings.Count() > 0)
 		{
-			foreach (IEntity radio: playerController.m_aRadios)
+			foreach (int radioIndex, IEntity radio: playerController.m_aRadios)
 			{
+				if (!radio || radioIndex >= playerController.m_aRadioSettings.Count())
+					continue;
 				CVON_RadioComponent radioComp = CVON_RadioComponent.Cast(radio.FindComponent(CVON_RadioComponent));
-				CVON_RadioSettingObject radioSetting = playerController.m_aRadioSettings.Get(playerController.m_aRadios.Find(radio));
+				if (!radioComp)
+					continue;
+				CVON_RadioSettingObject radioSetting = playerController.m_aRadioSettings.Get(radioIndex);
 				radioComp.UpdateChannelServer(1);
 				radioComp.UpdateFrequncyServer(radioSetting.m_sFreq);
-				playerController.SetVolumeFromServer(radioSetting.m_iVolume, playerController.m_aRadios.Find(radio));
-				playerController.SetStereoFromServer(radioSetting.m_Stereo, playerController.m_aRadios.Find(radio));
+				//Volume and ear are put back by the client itself (SCR_PlayerController.RestoreLocalRadioSettings).
+				//Sending them by this list position put them on the wrong radio: the client's list is rotated.
 			}
 			return;
 		}
@@ -215,8 +238,13 @@ modded class SCR_GroupsManagerComponent
 		for (int i = 0; i < playerController.m_aRadios.Count(); i++)
 		{
 			bool m_bFrequencyFound = false;
-			CVON_RadioComponent radioComp = CVON_RadioComponent.Cast(playerController.m_aRadios.Get(i).FindComponent(CVON_RadioComponent));
-			if (!playersGroup)
+			IEntity radioEntity = playerController.m_aRadios.Get(i);
+			if (!radioEntity)
+				continue;
+			CVON_RadioComponent radioComp = CVON_RadioComponent.Cast(radioEntity.FindComponent(CVON_RadioComponent));
+			if (!radioComp)
+				continue;
+			if (!playersGroup || !playerFaction)
 			{
 				radioComp.UpdateChannelServer(1);
 				radioComp.UpdateFrequncyServer("55500");

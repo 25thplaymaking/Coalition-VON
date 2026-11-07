@@ -126,6 +126,21 @@ FrameWidgetClass {
                   ShadowSize 2
                  }
                 }
+                TextWidgetClass "{6A1F0B7E2C4D5001}" {
+                 Name "Speaker"
+                 Slot LayoutSlot "{6A1F0B7E2C4D5002}" {
+                 }
+                 Color 0.9 0.95 0.85 1
+                 Text ""
+                 "Font Size" 22
+                 "Min Font Size" 12
+                 "Horizontal Alignment" Center
+                 "Vertical Alignment" Center
+                 FontProperties FontProperties "{6A1F0B7E2C4D5003}" {
+                  Font "{D3E3853DAEBA9BD6}UI/fonts/DS_DIGI.fnt"
+                  ShadowSize 2
+                 }
+                }
                 HorizontalLayoutWidgetClass "{66466B0B87AAAFF4}" {
                  Name "Freq/Channel"
                  Slot LayoutSlot "{663E57766472ED5B}" {

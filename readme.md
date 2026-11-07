@@ -1,3 +1,14 @@
+# Bifrost VON
+
+Task Force Halberd's fork of **Coalition VON** by CoalitionArma
+([upstream](https://github.com/CoalitionArma/Coalition-VON)), used under the Arma Public License.
+Not endorsed by CoalitionArma. Credits: [NOTICE.md](NOTICE.md). License: [LICENSE.md](LICENSE.md).
+What the fork changes, settings, and the TFAR comparison: [docs/BIFROST_CHANGES.md](docs/BIFROST_CHANGES.md).
+
+The upstream documentation follows. It applies to Bifrost VON unchanged unless the change notes say otherwise.
+
+---
+
 # Coalition TeamSpeak Plugin – Server Admin Quickstart Guide
 
 Arma Reforger writes a `VONServerSettings.json` file that tells the Coalition TeamSpeak Plugin how to connect and synchronize with your TeamSpeak server. This file is the single source of truth for connection details and channel management.

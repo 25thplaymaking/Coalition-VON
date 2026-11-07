@@ -19,6 +19,12 @@ class CVON_RadioComponent: ScriptComponent
 	//How far it go...
 	[Attribute("5000")] int m_iRadioRange;
 
+	//What can be typed in on the keypad, in kHz. 5 kHz steps take the commo card's 31120 / 31130 style
+	//frequencies; the original only allowed 25 kHz steps (31125, 31150).
+	[Attribute("30000", desc: "Lowest frequency (kHz) that can be typed in")] int m_iMinFrequency;
+	[Attribute("87975", desc: "Highest frequency (kHz) that can be typed in")] int m_iMaxFrequency;
+	[Attribute("5", desc: "Tuning step (kHz): a typed frequency must be a multiple of this")] int m_iFrequencyStep;
+
 	//The Icon at the center of the VON Radial Menu
 	[Attribute("{D9F335476016F8D7}UI/layouts/Radios/ANPRC152/data/ANPRC152Icon.edds", UIWidgets.ResourcePickerThumbnail, "Icon in the center of the radial menu", params: "edds")] ResourceName m_sRadioIcon;
 
@@ -65,6 +71,14 @@ class CVON_RadioComponent: ScriptComponent
 
 	//What ear it comes out of, neither needs to be tracked across clients cause who gives af.
 	CVON_EStereo m_eStereo = CVON_EStereo.BOTH;
+
+	//Monitor (TFAR's "additional channel"): one more of this radio's channels is heard as well, in its own
+	//ear, so two nets play at once from one radio. 0 is off, else a channel number (1 = m_aChannels[0]).
+	//Replicated so the server routes that net's traffic to us; transmitting stays on the main channel.
+	[RplProp(onRplName: "OnRadioStateReplicated")] int m_iMonitorChannel = 0;
+
+	//The monitored channel's ear, local like m_eStereo
+	CVON_EStereo m_eMonitorStereo = CVON_EStereo.BOTH;
 
 	//Speaker: the radio plays out loud for the people around it, positioned where it is. Speakers start
 	//off; a vehicle's crew or a manpack's carrier turns theirs on (CanUseSpeaker / SpeakerOnByDefault).
@@ -217,6 +231,55 @@ class CVON_RadioComponent: ScriptComponent
 		BumpAndNotify();
 	}
 
+	//Is this a frequency the keypad accepts (m_iMinFrequency..m_iMaxFrequency in m_iFrequencyStep steps)
+	//==========================================================================================================================================================================
+	bool IsValidFrequency(int frequency)
+	{
+		int step = Math.Max(m_iFrequencyStep, 1);
+		return frequency >= m_iMinFrequency && frequency <= m_iMaxFrequency && frequency % step == 0;
+	}
+
+	//Monitor
+	//==========================================================================================================================================================================
+	//The monitored channel's frequency, "" when off or the channel no longer exists
+	string GetMonitorFrequency()
+	{
+		if (m_iMonitorChannel < 1 || m_iMonitorChannel > m_aChannels.Count())
+			return "";
+		return m_aChannels.Get(m_iMonitorChannel - 1);
+	}
+
+	//Does this radio hear a transmission on this frequency: its main channel or the monitored one
+	bool ReceivesFrequency(string frequency)
+	{
+		if (frequency == "")
+			return false;
+		return m_sFrequency == frequency || GetMonitorFrequency() == frequency;
+	}
+
+	//Authority
+	void UpdateMonitorChannelServer(int channel)
+	{
+		if (channel < 0 || channel > m_aChannels.Count())
+			channel = 0;
+		m_iMonitorChannel = channel;
+		BumpAndNotify();
+	}
+
+	//saveSettings false while settings are being restored (saving then would overwrite the rest)
+	void SetMonitorChannelClient(int channel, bool saveSettings = true)
+	{
+		SCR_PlayerController pc = SCR_PlayerController.Cast(GetGame().GetPlayerController());
+		if (!pc)
+			return;
+		pc.UpdateRadioMonitorChannel(channel, GetRplId());
+		//Shown straight away; the server's value replicates back (OnRadioStateReplicated rewrites RadioData)
+		m_iMonitorChannel = channel;
+		WriteJSON(SCR_PlayerController.GetLocalControlledEntity());
+		if (saveSettings)
+			pc.UpdateSettings();
+	}
+
 	//Called on the authority, updates the TimeDeviation.
 	//==========================================================================================================================================================================
 	void AddChannelServer()
@@ -240,9 +303,13 @@ class CVON_RadioComponent: ScriptComponent
 		return false;
 	}
 
+	//Manpacks always; handheld radios too when the gamemode allows it (CVON_VONGameModeComponent.m_bHandheldSpeakers)
 	bool CanUseSpeaker()
 	{
-		return IsManpack();
+		if (IsManpack())
+			return true;
+		CVON_VONGameModeComponent gamemode = CVON_VONGameModeComponent.GetInstance();
+		return gamemode && gamemode.m_bHandheldSpeakers;
 	}
 
 	bool IsSpeakerOn()
@@ -400,7 +467,7 @@ class CVON_RadioComponent: ScriptComponent
 	{
 		SCR_PlayerController pc = SCR_PlayerController.Cast(GetGame().GetPlayerController());
 		pc.UpdateRadioFrequency(input, GetRplId());
-		GetGame().GetCallqueue().CallLater(pc.UpdateSettings, 500, false);
+		GetGame().GetCallqueue().CallLater(pc.UpdateSettings, 500, false, null);
 		WriteJSON(SCR_PlayerController.GetLocalControlledEntity());
 	}
 
@@ -664,6 +731,25 @@ class CVON_RadioComponent: ScriptComponent
 			VONSave.EndObject();
 			radioFreqs += radioComp.m_sFrequency + "|";
 			factionKeys += radioComp.m_sFactionKey + "|";
+
+			//The monitored channel is one more radio entry for the plugin (every plugin version plays all
+			//matching entries), in its own ear, and one more frequency for the server to route to us
+			string monitorFreq = radioComp.GetMonitorFrequency();
+			if (monitorFreq != "" && monitorFreq != radioComp.m_sFrequency)
+			{
+				VONSave.StartObject("M" + radio.ToString());
+				VONSave.WriteValue("Freq", monitorFreq);
+				VONSave.WriteValue("TimeDeviation", radioComp.m_iTimeDeviation);
+				VONSave.WriteValue("Volume", radioComp.m_iVolume);
+				VONSave.WriteValue("Stereo", radioComp.m_eMonitorStereo);
+				if (gamemode.IsEncryptionEnabled())
+					VONSave.WriteValue("FactionKey", radioComp.m_sFactionKey);
+				else
+					VONSave.WriteValue("FactionKey", "");
+				VONSave.EndObject();
+				radioFreqs += monitorFreq + "|";
+				factionKeys += radioComp.m_sFactionKey + "|";
+			}
 		}
 		//Listening to another player's radios (SCR_PlayerController.SetRadioListenTarget): theirs too, so the
 		//plugin plays their traffic as radio. Not in the frequency list sent to the server, which only routes

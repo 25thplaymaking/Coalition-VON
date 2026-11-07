@@ -61,6 +61,9 @@ modded class SCR_VONController
 
 	bool m_bFirstConnect = false;
 
+	//Once per session: the player's TeamSpeak plugin works but is older than the one this build ships with
+	bool m_bPluginUpdateHintShown = false;
+
 
 	//All these below are just how we assign keybinds to activate certain VON Transmissions
 	//==========================================================================================================================================================================
@@ -204,6 +207,7 @@ modded class SCR_VONController
 			return;
 		radioComp.m_eStereo = CVON_EStereo.RIGHT;
 		radioComp.WriteJSON(m_Player);
+		m_PlayerController.UpdateSettings();
 		m_VONHud.ShowVONChange(radioComp.m_iCurrentChannel - 1);
 	}
 
@@ -219,6 +223,7 @@ modded class SCR_VONController
 			return;
 		radioComp.m_eStereo = CVON_EStereo.LEFT;
 		radioComp.WriteJSON(m_Player);
+		m_PlayerController.UpdateSettings();
 		m_VONHud.ShowVONChange(radioComp.m_iCurrentChannel - 1);
 	}
 
@@ -234,6 +239,7 @@ modded class SCR_VONController
 			return;
 		radioComp.m_eStereo = CVON_EStereo.BOTH;
 		radioComp.WriteJSON(m_Player);
+		m_PlayerController.UpdateSettings();
 		m_VONHud.ShowVONChange(radioComp.m_iCurrentChannel - 1);
 	}
 
@@ -248,6 +254,13 @@ modded class SCR_VONController
 		CVON_RadioComponent radio = CVON_VehicleComms.GetOperatedRadio(m_Player);
 		if (!radio || !radio.CanUseSpeaker())
 			radio = CVON_Manpack.GetManpackRadio(m_Player);
+		//No vehicle radio or manpack: our active radio, when handheld speakers are on (TFAR style)
+		if ((!radio || !radio.CanUseSpeaker()) && m_PlayerController.m_aRadios.Count() > 0 && m_PlayerController.m_aRadios[0])
+		{
+			CVON_RadioComponent active = CVON_RadioComponent.Cast(m_PlayerController.m_aRadios[0].FindComponent(CVON_RadioComponent));
+			if (active && active.GetCarrier() == m_Player)
+				radio = active;
+		}
 		if (!radio || !radio.CanUseSpeaker())
 			return;
 
@@ -258,9 +271,9 @@ modded class SCR_VONController
 			radioName = "Vehicle radio";
 		// IsSpeakerOn() still has the old value until the server's change replicates
 		if (radio.IsSpeakerOn())
-			SCR_HintManagerComponent.ShowCustomHint(radioName + " speaker off", "Coalition VON", 2);
+			SCR_HintManagerComponent.ShowCustomHint(radioName + " speaker off", "Bifrost VON", 2);
 		else
-			SCR_HintManagerComponent.ShowCustomHint(radioName + " speaker on", "Coalition VON", 2);
+			SCR_HintManagerComponent.ShowCustomHint(radioName + " speaker on", "Bifrost VON", 2);
 	}
 
 	//Keybind: crew load their encryption key and channels into the vehicle radio. Until someone does, it
@@ -281,12 +294,12 @@ modded class SCR_VONController
 
 		if (radio.SharesKey(factionComp.GetAffiliatedFactionKey()))
 		{
-			SCR_HintManagerComponent.ShowCustomHint("Vehicle radio is already on your encryption", "Coalition VON", 2);
+			SCR_HintManagerComponent.ShowCustomHint("Vehicle radio is already on your encryption", "Bifrost VON", 2);
 			return;
 		}
 
 		m_PlayerController.KeyFillVehicleRadio(radio.GetRplId());
-		SCR_HintManagerComponent.ShowCustomHint("Vehicle radio filled with your encryption and channels", "Coalition VON", 3);
+		SCR_HintManagerComponent.ShowCustomHint("Vehicle radio filled with your encryption and channels", "Bifrost VON", 3);
 	}
 
 	//Keybind to open active radio
@@ -718,6 +731,12 @@ modded class SCR_VONController
 			ReadPluginFiles();
 		}
 
+		if (m_fTime >= m_fNextReceivePopup)
+		{
+			m_fNextReceivePopup = m_fTime + RECEIVE_POPUP_INTERVAL;
+			UpdateReceivePopup();
+		}
+
 		//Handles broadcasting to other players
 		if (m_bIsBroadcasting)
 		{
@@ -954,6 +973,95 @@ modded class SCR_VONController
 		}
 	}
 
+	//Incoming calls: the radio pop-up shows which of our radios it is on and who is talking. A radio entry
+	//exists from the sender pressing push-to-talk until they let go (the server adds and removes it), so
+	//no plugin support is needed. Several at once: the one who started talking last is shown.
+	//==========================================================================================================================================================================
+	static const float RECEIVE_POPUP_INTERVAL = 0.1;
+	float m_fNextReceivePopup = 0;
+	ref array<int> m_aReceiveOrder = {};
+	int m_iReceivePopupPlayer = 0;
+
+	void UpdateReceivePopup()
+	{
+		if (!m_VONHud || !m_VONGameModeComponent || !m_VONGameModeComponent.m_bShowRadioCallerName)
+			return;
+
+		for (int i = m_aReceiveOrder.Count() - 1; i >= 0; i--)
+		{
+			CVON_VONContainer gone = m_PlayerController.m_aLocalEntries.Get(m_aReceiveOrder[i]);
+			if (!gone || gone.m_eVonType != CVON_EVONType.RADIO)
+				m_aReceiveOrder.RemoveOrdered(i);
+		}
+		foreach (int playerId, CVON_VONContainer container: m_PlayerController.m_aLocalEntries)
+		{
+			if (container && container.m_eVonType == CVON_EVONType.RADIO && !m_aReceiveOrder.Contains(playerId))
+				m_aReceiveOrder.Insert(playerId);
+		}
+
+		//Our own transmission's pop-up wins; dead players hear nothing
+		if (m_bIsBroadcasting || !m_CharacterController || m_CharacterController.GetLifeState() == ECharacterLifeState.DEAD)
+		{
+			m_iReceivePopupPlayer = 0;
+			return;
+		}
+
+		for (int j = m_aReceiveOrder.Count() - 1; j >= 0; j--)
+		{
+			int talker = m_aReceiveOrder[j];
+			CVON_VONContainer call = m_PlayerController.m_aLocalEntries.Get(talker);
+			CVON_RadioComponent radio;
+			int channel;
+			CVON_EStereo ear;
+			if (!FindReceivingRadio(call, radio, channel, ear))
+				continue;
+
+			m_VONHud.ShowReceiving(radio, channel, call.m_sFrequency, ear, m_PlayerManager.GetPlayerName(talker));
+			m_iReceivePopupPlayer = talker;
+			return;
+		}
+
+		if (m_iReceivePopupPlayer != 0)
+		{
+			m_iReceivePopupPlayer = 0;
+			m_VONHud.HideReceiving();
+		}
+	}
+
+	//Which of our radios hears this call, on which of its channels and in which ear (as the server and the
+	//plugin decide: frequency, time deviation, encryption key)
+	bool FindReceivingRadio(CVON_VONContainer call, out CVON_RadioComponent outRadio, out int outChannel, out CVON_EStereo outEar)
+	{
+		if (!call || m_PlayerController.GetHeadsetLoweredState())
+			return false;
+
+		bool encryption = m_BaseGamemode && m_BaseGamemode.IsEncryptionEnabled();
+		foreach (IEntity radioEntity: m_PlayerController.m_aRadios)
+		{
+			if (!radioEntity)
+				continue;
+			CVON_RadioComponent radioComp = CVON_RadioComponent.Cast(radioEntity.FindComponent(CVON_RadioComponent));
+			if (!radioComp || !radioComp.m_bPower || !radioComp.ReceivesFrequency(call.m_sFrequency))
+				continue;
+			if (encryption && call.m_sFactionKey != radioComp.m_sFactionKey)
+				continue;
+
+			outRadio = radioComp;
+			if (radioComp.m_sFrequency == call.m_sFrequency)
+			{
+				outChannel = radioComp.m_iCurrentChannel;
+				outEar = radioComp.m_eStereo;
+			}
+			else
+			{
+				outChannel = radioComp.m_iMonitorChannel;
+				outEar = radioComp.m_eMonitorStereo;
+			}
+			return true;
+		}
+		return false;
+	}
+
 	//Entries the server adds and removes (radio transmissions, and those heard through a vehicle speaker)
 	static bool IsServerManaged(CVON_VONContainer container)
 	{
@@ -1024,9 +1132,15 @@ modded class SCR_VONController
 		{
 			FactionAffiliationComponent factionComp = FactionAffiliationComponent.Cast(m_Player.FindComponent(FactionAffiliationComponent));
 			if (factionComp && factionComp.GetAffiliatedFactionKey() != "" && !radio.SharesKey(factionComp.GetAffiliatedFactionKey()))
-				hint += ". The radio is on another encryption: fill it with yours to use your channels.";
+			{
+				//AttachVehicleRadio has just asked the server to fill it, if it may (crew comms style)
+				if (radio.WouldAutoFill(m_Player))
+					hint += ". Radio set to your encryption and channels.";
+				else
+					hint += ". The radio is on another encryption: fill it with yours to use your channels.";
+			}
 		}
-		SCR_HintManagerComponent.ShowCustomHint(hint, "Coalition VON", 4);
+		SCR_HintManagerComponent.ShowCustomHint(hint, "Bifrost VON", 4);
 	}
 
 	//Reads what the TeamSpeak plugin supports (VONPluginInfo.json) and who is talking (VONTalking.json).
@@ -1238,6 +1352,56 @@ modded class SCR_VONController
 	{
 	    float a = Math.AbsFloat(dB);
 	    return Math.Pow(10.0, -a / 20.0);
+	}
+
+	//Terrain interference (as in TFAR): how far the ground rises above the straight line between the two
+	//radios, held 1.5 m up like a handset or antenna. The worst point counts, so one ridge between two
+	//valleys weakens a call while an open plain or a hilltop doesn't. Terrain only, not buildings or trees.
+	//==========================================================================================================================================================================
+	static const int TERRAIN_SAMPLES = 24;
+	static const float TERRAIN_RECHECK_INTERVAL = 0.5;
+	static const float RADIO_ANTENNA_HEIGHT = 1.5;
+
+	float TerrainObstruction(vector from, vector to)
+	{
+		BaseWorld world = GetGame().GetWorld();
+		if (!world)
+			return 0;
+
+		from[1] = from[1] + RADIO_ANTENNA_HEIGHT;
+		to[1] = to[1] + RADIO_ANTENNA_HEIGHT;
+		vector step = (to - from) * (1.0 / TERRAIN_SAMPLES);
+		float worst = 0;
+		for (int i = 1; i < TERRAIN_SAMPLES; i++)
+		{
+			float stepCount = i;
+			vector point = from + step * stepCount;
+			float above = world.GetSurfaceY(point[0], point[2]) - point[1];
+			if (above > worst)
+				worst = above;
+		}
+		return worst;
+	}
+
+	//Voice directivity (as in TFAR): a voice is a little quieter behind the talker than in front of them.
+	//0 dB in front, half at the side, -VOICE_DIRECTIVITY_DB straight behind; from the talker's facing.
+	//==========================================================================================================================================================================
+	static const float VOICE_DIRECTIVITY_DB = 5.0;
+
+	static float TalkerFacingDb(IEntity talker, vector listenerPos)
+	{
+		if (!talker)
+			return 0;
+
+		vector facing = talker.GetTransformAxis(2);
+		facing[1] = 0;
+		vector toListener = listenerPos - talker.GetOrigin();
+		toListener[1] = 0;
+		if (facing.Length() < 0.001 || toListener.Length() < 0.001)
+			return 0;
+
+		float cosAngle = vector.Dot(facing.Normalized(), toListener.Normalized());
+		return -VOICE_DIRECTIVITY_DB * (1.0 - cosAngle) * 0.5;
 	}
 
 	//Also bless ChatGPT, handles the arcade signal calulations.
@@ -1558,8 +1722,9 @@ modded class SCR_VONController
 		}
 		loweredDecibels = container.m_iLoweredDecibles;
 
-		float levelDb = VoiceTierDb(container.m_iVolume) + OcclusionDb(loweredDecibels);
-		ComputeStereoLR(m_Camera, GetListenerPosition(), GetHeadHeight(container.m_SoundSource), container.m_iVolume, levelDb, behindIntensity, left, right);
+		vector listenerPos = GetListenerPosition();
+		float levelDb = VoiceTierDb(container.m_iVolume) + OcclusionDb(loweredDecibels) + TalkerFacingDb(container.m_SoundSource, listenerPos);
+		ComputeStereoLR(m_Camera, listenerPos, GetHeadHeight(container.m_SoundSource), container.m_iVolume, levelDb, behindIntensity, left, right);
 		return true;
 	}
 
@@ -1708,7 +1873,15 @@ modded class SCR_VONController
 				}
 
 				VONLoad.EndObject();
-				if (gameName == "" || ChannelName != m_VONGameModeComponent.m_sTeamSpeakChannelName || ChannelPassword != m_VONGameModeComponent.m_sTeamSpeakChannelPassword || m_PlayerController.m_sTeamspeakPluginVersion != m_VONGameModeComponent.m_sTeamspeakPluginVersion || InGame != true)
+
+				//An older plugin (e.g. the Coalition build) still works, it only misses the Bifrost fixes
+				if (!m_bPluginUpdateHintShown && TSClientId != 0 && m_VONGameModeComponent.IsPluginCompatible(m_PlayerController.m_sTeamspeakPluginVersion) && !m_VONGameModeComponent.IsPluginCurrent(m_PlayerController.m_sTeamspeakPluginVersion))
+				{
+					m_bPluginUpdateHintShown = true;
+					SCR_HintManagerComponent.ShowCustomHint(string.Format("Your TeamSpeak plugin is version %1. Install the Bifrost VON plugin %2 so radio ears play on the correct side.", m_PlayerController.m_sTeamspeakPluginVersion, m_VONGameModeComponent.m_sTeamspeakPluginVersion), "Bifrost VON", 12);
+				}
+
+				if (gameName == "" || ChannelName != m_VONGameModeComponent.m_sTeamSpeakChannelName || ChannelPassword != m_VONGameModeComponent.m_sTeamSpeakChannelPassword || !m_VONGameModeComponent.IsPluginCompatible(m_PlayerController.m_sTeamspeakPluginVersion) || InGame != true)
 				{
 					SCR_JsonSaveContext VONServerData = new SCR_JsonSaveContext();
 					VONServerData.StartObject("ServerData");
@@ -1824,10 +1997,23 @@ modded class SCR_VONController
 
 			if (container.m_eVonType == CVON_EVONType.RADIO)
 			{
+				vector senderPos = container.m_vSenderLocation;
 				if (container.m_SoundSource)
-					container.m_fConnectionQuality = GetSignalStrength(vector.Distance(GetRadioReceiverOrigin(), container.m_SoundSource.GetOrigin()), container.m_iMaxDistance);
-				else
-					container.m_fConnectionQuality = GetSignalStrength(vector.Distance(GetRadioReceiverOrigin(), container.m_vSenderLocation), container.m_iMaxDistance);
+					senderPos = container.m_SoundSource.GetOrigin();
+				vector receiverPos = GetRadioReceiverOrigin();
+
+				//Terrain between us costs signal as if the call came from further away
+				float terrainPenalty = 0;
+				if (m_VONGameModeComponent.m_fTerrainInterference > 0)
+				{
+					if (m_fTime >= container.m_fNextTerrainTime)
+					{
+						container.m_fTerrainObstruction = TerrainObstruction(senderPos, receiverPos);
+						container.m_fNextTerrainTime = m_fTime + TERRAIN_RECHECK_INTERVAL;
+					}
+					terrainPenalty = container.m_fTerrainObstruction * m_VONGameModeComponent.m_fTerrainInterference;
+				}
+				container.m_fConnectionQuality = GetSignalStrength(vector.Distance(receiverPos, senderPos) + terrainPenalty, container.m_iMaxDistance);
 			}
 			else if (container.m_eVonType == CVON_EVONType.SPEAKER && container.m_SpeakerEntity)
 			{

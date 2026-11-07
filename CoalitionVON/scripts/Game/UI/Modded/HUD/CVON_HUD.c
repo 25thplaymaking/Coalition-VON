@@ -172,6 +172,7 @@ class CVON_HUD: SCR_InfoDisplay {
 		if (!radioComp)
 			return;
 		
+		MarkLocalPopup();
 		UpdateCVONRadioWidget(radioComp, true, m_wRoot, input);
 	}
 	
@@ -195,6 +196,7 @@ class CVON_HUD: SCR_InfoDisplay {
 		if (!radioComp)
 			return;
 		
+		MarkLocalPopup();
 		UpdateCVONRadioWidget(radioComp, true, m_wRoot, radioComp.m_iCurrentChannel - 1);
 	}
 	
@@ -227,6 +229,7 @@ class CVON_HUD: SCR_InfoDisplay {
 		if (!radioComp)
 			return;
 		
+		MarkLocalPopup();
 		UpdateCVONRadioWidget(radioComp, true, m_wRoot, radioComp.m_iCurrentChannel - 1);
 	}
 	
@@ -237,7 +240,57 @@ class CVON_HUD: SCR_InfoDisplay {
 		AnimateWidget.Opacity(vonWidget, 0, 1/0.3);
 	}
 	
-	static void UpdateCVONRadioWidget(CVON_RadioComponent radioComp, bool showWindow, Widget root, int input)
+	//Radio pop-up while a call comes in (SCR_VONController.UpdateReceivePopup)
+	//------------------------------------------------------------------------------------------------
+	protected bool m_bShowingReceive = false;
+	//World time (ms) of the last pop-up the player opened themselves (talking, channel, ear, rotate keys):
+	//an incoming call doesn't take the pop-up over for RECEIVE_YIELD_MS after that
+	protected float m_fLocalPopupTime = -100000;
+	static const float RECEIVE_YIELD_MS = 1500;
+
+	protected void MarkLocalPopup()
+	{
+		m_bShowingReceive = false;
+		if (GetGame().GetWorld())
+			m_fLocalPopupTime = GetGame().GetWorld().GetWorldTime();
+	}
+
+	//channelNumber: the radio's channel the call is on (its main or monitored channel); ear: that channel's ear
+	void ShowReceiving(CVON_RadioComponent radioComp, int channelNumber, string frequency, CVON_EStereo ear, string speakerName)
+	{
+		if (!radioComp || !m_wRoot)
+			return;
+		if (GetGame().GetWorld() && GetGame().GetWorld().GetWorldTime() - m_fLocalPopupTime < RECEIVE_YIELD_MS)
+			return;
+
+		Widget entry = m_wRoot.FindAnyWidget("VONEntry");
+		if (!entry)
+			return;
+		AnimateWidget.StopAllAnimations(entry);
+		entry.SetOpacity(1);
+		entry.SetVisible(true);
+		UpdateCVONRadioWidget(radioComp, true, m_wRoot, channelNumber - 1, ear, speakerName);
+		TextWidget frequencyText = TextWidget.Cast(m_wRoot.FindAnyWidget("Frequency"));
+		if (frequencyText)
+			frequencyText.SetText(frequency);
+		m_bShowingReceive = true;
+	}
+
+	//The call ended: fade out, unless the pop-up is showing something the player opened since
+	void HideReceiving()
+	{
+		if (!m_bShowingReceive)
+			return;
+		m_bShowingReceive = false;
+		HideVON();
+	}
+
+	bool IsShowingReceive()
+	{
+		return m_bShowingReceive;
+	}
+
+	static void UpdateCVONRadioWidget(CVON_RadioComponent radioComp, bool showWindow, Widget root, int input, int earOverride = -1, string speakerName = "")
 	{
 		ImageWidget left = ImageWidget.Cast(root.FindAnyWidget("Left"));
 		ImageWidget right = ImageWidget.Cast(root.FindAnyWidget("Right"));
@@ -246,26 +299,39 @@ class CVON_HUD: SCR_InfoDisplay {
 		TextWidget channel = TextWidget.Cast(root.FindAnyWidget("Channel"));
 		TextWidget frequency = TextWidget.Cast(root.FindAnyWidget("Frequency"));
 		TextWidget radio = TextWidget.Cast(root.FindAnyWidget("Radio"));
+		TextWidget speaker = TextWidget.Cast(root.FindAnyWidget("Speaker"));
 		WindowWidget window = WindowWidget.Cast(root.FindAnyWidget("Window"));
 		WindowWidget window1 = WindowWidget.Cast(root.FindAnyWidget("Window1"));
 		WindowWidget window2 = WindowWidget.Cast(root.FindAnyWidget("Window2"));
-		
+
 		//Radio Name text
 		radio.SetText(radioComp.m_sRadioName);
-		//Freq text
-		frequency.SetText(radioComp.m_aChannels.Get(input));
+		//Who is talking (only while a call comes in)
+		if (speaker)
+		{
+			speaker.SetText(speakerName);
+			speaker.SetVisible(speakerName != "");
+		}
+		//Freq text (a channel number past the list, e.g. one just added, shows the tuned frequency)
+		if (input >= 0 && input < radioComp.m_aChannels.Count())
+			frequency.SetText(radioComp.m_aChannels.Get(input));
+		else
+			frequency.SetText(radioComp.m_sFrequency);
 		//Channel text
 		channel.SetText(string.Format("CH-%1", input + 1));
-		
-		
+
+		CVON_EStereo ear = radioComp.m_eStereo;
+		if (earOverride >= 0)
+			ear = earOverride;
+
 		right.LoadImageTexture(0, CVON_HUD.m_sArrowOn);
 		right.SetColor(Color.FromRGBA(180, 255, 180, 255));
 		left.LoadImageTexture(0, CVON_HUD.m_sArrowOn);
 		left.SetColor(Color.FromRGBA(180, 255, 180, 255));
-		if (radioComp.m_eStereo != CVON_EStereo.BOTH)
+		if (ear != CVON_EStereo.BOTH)
 		{
 			//Right ear
-			if(radioComp.m_eStereo != CVON_EStereo.RIGHT)
+			if(ear != CVON_EStereo.RIGHT)
 			{
 				right.LoadImageTexture(0, CVON_HUD.m_sArrowOff);
 				right.SetColor(Color.White);

@@ -1,7 +1,7 @@
 GameProject {
- ID "CoalitionVON"
- GUID "6624E618B9058265"
- TITLE "CoalitionVON"
+ ID "BifrostVON"
+ GUID "FE63A4168A0D582D"
+ TITLE "Bifrost VON"
  Dependencies {
   "58D0FB3206B6F859"
  }
