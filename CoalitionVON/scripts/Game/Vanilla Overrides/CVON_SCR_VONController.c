@@ -146,12 +146,12 @@ modded class SCR_VONController
 		if (m_InputManager)
 		{
 			m_InputManager.AddActionListener(ACTION_CHANNEL, EActionTrigger.DOWN, ActivateCVONSR);
-			m_InputManager.AddActionListener(ACTION_CHANNEL, EActionTrigger.UP, DeactivateCVON);
+			m_InputManager.AddActionListener(ACTION_CHANNEL, EActionTrigger.UP, ReleaseRadioKey);
 			m_InputManager.AddActionListener(ACTION_TRANSCEIVER_CYCLE, EActionTrigger.DOWN, ActionVONTransceiverCycle);
 			m_InputManager.AddActionListener("VONLongRange", EActionTrigger.DOWN, ActivateCVONLR);
-			m_InputManager.AddActionListener("VONLongRange", EActionTrigger.UP, DeactivateCVON);
+			m_InputManager.AddActionListener("VONLongRange", EActionTrigger.UP, ReleaseRadioKey);
 			m_InputManager.AddActionListener("VONMediumRange", EActionTrigger.DOWN, ActivateCVONLR2);
-			m_InputManager.AddActionListener("VONMediumRange", EActionTrigger.UP, DeactivateCVON);
+			m_InputManager.AddActionListener("VONMediumRange", EActionTrigger.UP, ReleaseRadioKey);
 			m_InputManager.AddActionListener("VONRotateActive", EActionTrigger.DOWN, RotateActiveRadio);
 			m_InputManager.AddActionListener("VONChannelUp", EActionTrigger.DOWN, ChannelUp);
 			m_InputManager.AddActionListener("VONChannelDown", EActionTrigger.DOWN, ChannelDown);
@@ -406,6 +406,89 @@ modded class SCR_VONController
 		return false;
 	}
 
+	//Radio key release tail and key discipline (ideas from Lima Charlie's release notes, our own code)
+	//==========================================================================================================================================================================
+	//A radio transmission ends this long after the key is let go, so the end of the last word still goes out.
+	//Pressing the same radio's key again inside it carries on the same transmission: no new beeps and no new
+	//entry for everyone, so a stutter on the key reads as one call.
+	static const float RADIO_RELEASE_TAIL = 0.3;
+	//Keying a radio more than RADIO_KEY_LIMIT times in RADIO_KEY_WINDOW seconds locks the radio keys for
+	//RADIO_KEY_LOCK seconds (CVON_VONGameModeComponent.m_bRadioKeySpamLock)
+	static const int RADIO_KEY_LIMIT = 4;
+	static const float RADIO_KEY_WINDOW = 4;
+	static const float RADIO_KEY_LOCK = 2;
+
+	bool m_bReleasePending = false;
+	float m_fReleaseAt = 0;
+	ref array<float> m_aRadioKeyTimes = {};
+	float m_fRadioKeysLockedUntil = 0;
+
+	//Key up on a radio key: a radio transmission ends after the tail, anything else at once
+	void ReleaseRadioKey()
+	{
+		if (m_CurrentVONContainer && m_CurrentVONContainer.m_eVonType == CVON_EVONType.RADIO && !m_bToggleBuffer)
+		{
+			m_bReleasePending = true;
+			m_fReleaseAt = m_fTime + RADIO_RELEASE_TAIL;
+			return;
+		}
+		DeactivateCVON();
+	}
+
+	//The radio a radio key transmits on (the same order as ActivateCVON below)
+	IEntity RadioForTransmitType(CVON_EVONTransmitType transmitType)
+	{
+		int index = -1;
+		switch (transmitType)
+		{
+			case CVON_EVONTransmitType.SR: {index = 0; break;}
+			case CVON_EVONTransmitType.LR: {index = 1; break;}
+			case CVON_EVONTransmitType.LR2: {index = 2; break;}
+		}
+		if (index < 0 || !m_PlayerController || index >= m_PlayerController.m_aRadios.Count())
+			return null;
+		return m_PlayerController.m_aRadios.Get(index);
+	}
+
+	//The same radio's key pressed again while its transmission is still in the release tail
+	bool ContinuesPendingTransmission(CVON_EVONTransmitType transmitType)
+	{
+		if (!m_bReleasePending || !m_CurrentVONContainer || m_CurrentVONContainer.m_eVonType != CVON_EVONType.RADIO)
+			return false;
+		IEntity pressedRadio = RadioForTransmitType(transmitType);
+		if (!pressedRadio)
+			return false;
+		RplComponent pressedRpl = RplComponent.Cast(pressedRadio.FindComponent(RplComponent));
+		return pressedRpl && pressedRpl.Id() == m_CurrentVONContainer.m_iRadioId;
+	}
+
+	//Counts a radio key press. False while the radio keys are locked, or when this press locks them.
+	bool AllowRadioKeyPress()
+	{
+		if (!m_VONGameModeComponent || !m_VONGameModeComponent.m_bRadioKeySpamLock)
+			return true;
+		if (m_fTime < m_fRadioKeysLockedUntil)
+		{
+			SCR_UISoundEntity.SoundEvent(SCR_SoundEvent.ACTION_FAILED);
+			return false;
+		}
+		for (int i = m_aRadioKeyTimes.Count() - 1; i >= 0; i--)
+		{
+			if (m_fTime - m_aRadioKeyTimes[i] > RADIO_KEY_WINDOW)
+				m_aRadioKeyTimes.Remove(i);
+		}
+		m_aRadioKeyTimes.Insert(m_fTime);
+		if (m_aRadioKeyTimes.Count() > RADIO_KEY_LIMIT)
+		{
+			m_aRadioKeyTimes.Clear();
+			m_fRadioKeysLockedUntil = m_fTime + RADIO_KEY_LOCK;
+			SCR_UISoundEntity.SoundEvent(SCR_SoundEvent.ACTION_FAILED);
+			SCR_HintManagerComponent.ShowCustomHint("Radio keys locked for 2 seconds: too many key presses.", "Bifrost VON", 3);
+			return false;
+		}
+		return true;
+	}
+
 	//This builds our VON Container with all the data we need to send to other clients based on the data sent out. This starts the talking process.
 	//==========================================================================================================================================================================
 	void ActivateCVON(CVON_EVONTransmitType transmitType = CVON_EVONTransmitType.NONE)
@@ -419,6 +502,21 @@ modded class SCR_VONController
 			return;
 		if (m_CharacterController.GetLifeState() != ECharacterLifeState.ALIVE)
 			return;
+
+		bool radioKey = transmitType == CVON_EVONTransmitType.SR || transmitType == CVON_EVONTransmitType.LR || transmitType == CVON_EVONTransmitType.LR2;
+		//Same radio pressed again inside the release tail: one continuous transmission
+		if (radioKey && ContinuesPendingTransmission(transmitType))
+		{
+			m_bReleasePending = false;
+			return;
+		}
+		if (radioKey && !AllowRadioKeyPress())
+		{
+			if (m_CurrentVONContainer)
+				DeactivateCVON();
+			return;
+		}
+
 		if (m_CurrentVONContainer)
 			DeactivateCVON();
 		CVON_VONContainer container = new CVON_VONContainer();
@@ -537,6 +635,7 @@ modded class SCR_VONController
 	//==========================================================================================================================================================================
 	void DeactivateCVON()
 	{
+		m_bReleasePending = false;
 		if (m_bToggleBuffer)
 			return;
 		if (!m_VONGameModeComponent)
@@ -564,9 +663,10 @@ modded class SCR_VONController
 				}
 			}
 
-			m_VONHud.HideVON();
+			if (m_VONHud)
+				m_VONHud.HideVON();
 		}
-		else
+		else if (m_VONHud)
 			m_VONHud.HideDirect();
 
 		// Only radio transmissions were sent to the server (see EOnFixedFrame); direct speech has nothing to remove
@@ -678,6 +778,11 @@ modded class SCR_VONController
 		}
 
 		m_fTime += timeSlice;
+
+		//A released radio key's tail has run out. Before the early returns below, so a transmission can't be
+		//left open when the character goes away during the tail.
+		if (m_bReleasePending && m_fTime >= m_fReleaseAt)
+			DeactivateCVON();
 
 		if (!m_PlayerController)
 			m_PlayerController = SCR_PlayerController.Cast(GetGame().GetPlayerController());
@@ -1386,33 +1491,84 @@ modded class SCR_VONController
 	    return Math.Pow(10.0, -a / 20.0);
 	}
 
-	//Terrain interference (as in TFAR): how far the ground rises above the straight line between the two
-	//radios, held 1.5 m up like a handset or antenna. The worst point counts, so one ridge between two
-	//valleys weakens a call while an open plain or a hilltop doesn't. Terrain only, not buildings or trees.
+	//Terrain: hills between two radios shrink the radio's range (the model Lima Charlie describes for its 2.0.5
+	//terrain change; our own implementation). The ground is sampled along the straight line between the two
+	//radios, held 1.5 m up like a handset or antenna. Each stretch rising above that line is one hill, as high
+	//as the most it rises. A hill takes a share of the range that grows with its height (most from its first
+	//metres, never more than 80%), and several hills each take their share of what the others left (90% at
+	//most), so a ridge costs a short and a long range radio the same share rather than the same metres, and a
+	//radio is never dead at point blank. Terrain only, not buildings or trees.
 	//==========================================================================================================================================================================
-	static const int TERRAIN_SAMPLES = 24;
 	static const float TERRAIN_RECHECK_INTERVAL = 0.5;
 	static const float RADIO_ANTENNA_HEIGHT = 1.5;
+	static const float TERRAIN_SAMPLE_SPACING = 25;		//m between ground samples
+	static const int TERRAIN_MIN_SAMPLES = 8;
+	static const int TERRAIN_MAX_SAMPLES = 128;
+	static const float TERRAIN_END_MARGIN = 10;			//m ignored at each end, so standing on a slope doesn't block your own radio
+	static const float TERRAIN_HILL_CAP = 250;			//m; a hill counts as at most this high
+	static const float TERRAIN_HILL_SCALE = 95;			//m; a hill this high takes 63% of the most one hill can take
+	static const float TERRAIN_HILL_MAX_SHARE = 0.8;
+	static const float TERRAIN_TOTAL_MAX_SHARE = 0.9;
+	static const int TERRAIN_MAX_HILLS = 8;
 
-	float TerrainObstruction(vector from, vector to)
+	//Share of the radio's range one hill of this height takes
+	static float HillRangeShare(float height)
+	{
+		if (height <= 0)
+			return 0;
+		return TERRAIN_HILL_MAX_SHARE * (1 - Math.Pow(2.718281828, -height / TERRAIN_HILL_SCALE));
+	}
+
+	//Share of the range several hills take together: each takes its share of what the ones before it left
+	static float CombinedRangeLoss(array<float> hillHeights)
+	{
+		array<float> hills = {};
+		hills.Copy(hillHeights);
+		hills.Sort(true);
+		float kept = 1;
+		for (int i = 0; i < hills.Count() && i < TERRAIN_MAX_HILLS; i++)
+			kept *= 1 - HillRangeShare(hills[i]);
+		return Math.Min(1 - kept, TERRAIN_TOTAL_MAX_SHARE);
+	}
+
+	//Share of a radio's range (0..0.9) lost to the terrain between two radios. heightScale is the server's
+	//terrain setting (CVON_VONGameModeComponent.m_fTerrainEffect).
+	float TerrainRangeLoss(vector from, vector to, float heightScale = 1)
 	{
 		BaseWorld world = GetGame().GetWorld();
-		if (!world)
+		if (!world || heightScale <= 0)
 			return 0;
 
 		from[1] = from[1] + RADIO_ANTENNA_HEIGHT;
 		to[1] = to[1] + RADIO_ANTENNA_HEIGHT;
-		vector step = (to - from) * (1.0 / TERRAIN_SAMPLES);
-		float worst = 0;
-		for (int i = 1; i < TERRAIN_SAMPLES; i++)
+		float length = vector.Distance(from, to);
+		if (length <= TERRAIN_END_MARGIN * 2)
+			return 0;
+
+		int samples = length / TERRAIN_SAMPLE_SPACING;
+		samples = Math.ClampInt(samples, TERRAIN_MIN_SAMPLES, TERRAIN_MAX_SAMPLES);
+		array<float> hills = {};
+		float hill = 0;
+		for (int i = 1; i < samples; i++)
 		{
-			float stepCount = i;
-			vector point = from + step * stepCount;
-			float above = world.GetSurfaceY(point[0], point[2]) - point[1];
-			if (above > worst)
-				worst = above;
+			float fraction = i;
+			fraction = fraction / samples;
+			float along = length * fraction;
+			if (along < TERRAIN_END_MARGIN || along > length - TERRAIN_END_MARGIN)
+				continue;
+			vector point = from + (to - from) * fraction;
+			float above = (world.GetSurfaceY(point[0], point[2]) - point[1]) * heightScale;
+			if (above > 0)
+				hill = Math.Max(hill, Math.Min(above, TERRAIN_HILL_CAP));
+			else if (hill > 0)
+			{
+				hills.Insert(hill);
+				hill = 0;
+			}
 		}
-		return worst;
+		if (hill > 0)
+			hills.Insert(hill);
+		return CombinedRangeLoss(hills);
 	}
 
 	//Voice directivity (as in TFAR): a voice is a little quieter behind the talker than in front of them.
@@ -2034,18 +2190,24 @@ modded class SCR_VONController
 					senderPos = container.m_SoundSource.GetOrigin();
 				vector receiverPos = GetRadioReceiverOrigin();
 
-				//Terrain between us costs signal as if the call came from further away
-				float terrainPenalty = 0;
-				if (m_VONGameModeComponent.m_fTerrainInterference > 0)
+				//A Game Master in the editor hears every call clearly (m_bGameMasterUnlimitedRadio)
+				if (m_VONGameModeComponent.m_bGameMasterUnlimitedRadio && IsListeningFromEditorCamera())
+					container.m_fConnectionQuality = 1;
+				else
 				{
-					if (m_fTime >= container.m_fNextTerrainTime)
+					//Terrain between us shrinks the sender's range
+					float terrainLoss = 0;
+					if (m_VONGameModeComponent.m_fTerrainEffect > 0)
 					{
-						container.m_fTerrainObstruction = TerrainObstruction(senderPos, receiverPos);
-						container.m_fNextTerrainTime = m_fTime + TERRAIN_RECHECK_INTERVAL;
+						if (m_fTime >= container.m_fNextTerrainTime)
+						{
+							container.m_fTerrainObstruction = TerrainRangeLoss(senderPos, receiverPos, m_VONGameModeComponent.m_fTerrainEffect);
+							container.m_fNextTerrainTime = m_fTime + TERRAIN_RECHECK_INTERVAL;
+						}
+						terrainLoss = container.m_fTerrainObstruction;
 					}
-					terrainPenalty = container.m_fTerrainObstruction * m_VONGameModeComponent.m_fTerrainInterference;
+					container.m_fConnectionQuality = GetSignalStrength(vector.Distance(receiverPos, senderPos), container.m_iMaxDistance * (1 - terrainLoss));
 				}
-				container.m_fConnectionQuality = GetSignalStrength(vector.Distance(receiverPos, senderPos) + terrainPenalty, container.m_iMaxDistance);
 			}
 			else if (container.m_eVonType == CVON_EVONType.SPEAKER && container.m_SpeakerEntity)
 			{

@@ -85,10 +85,20 @@ class CVON_VONGameModeComponent: SCR_BaseGameModeComponent
 	[Attribute("1", desc: "Handheld radios can be put on speaker, not only manpacks and vehicle radios")]
 	bool m_bHandheldSpeakers;
 
-	//Each metre of terrain rising above the line between two radios counts as this many metres of extra
-	//distance for signal quality (more static, then nothing). 0 turns terrain interference off.
-	[Attribute("7", desc: "Terrain interference: extra signal distance per metre of terrain between sender and receiver (0 = off)")]
-	float m_fTerrainInterference;
+	//Terrain between two radios takes a share of the radio's range (SCR_VONController.TerrainRangeLoss). This
+	//scales every hill's height: 1 = as measured, 2 = a 30 m hill counts as 60 m, 0 turns terrain off.
+	[Attribute("1", desc: "Terrain effect on radio range: scales every hill's height (1 = as measured, 0 = off)")]
+	float m_fTerrainEffect;
+
+	//Radio key discipline (as Lima Charlie does it): keying a radio more than RADIO_KEY_LIMIT times in
+	//RADIO_KEY_WINDOW seconds locks radio transmission for RADIO_KEY_LOCK seconds with a deny sound
+	[Attribute("1", desc: "Lock the radio keys for 2 s after more than 4 key presses in 4 s")]
+	bool m_bRadioKeySpamLock;
+
+	//Game Master (as Lima Charlie offers it): with the editor open, a Game Master's radios reach everyone on the
+	//net and hear everyone on it clearly, wherever the camera or body is (no range or terrain)
+	[Attribute("1", desc: "Game Masters with the editor open transmit and receive radio without range or terrain limits")]
+	bool m_bGameMasterUnlimitedRadio;
 
 	//If disabled there will be no babbel for other factions
 	[Attribute("0")] bool m_bUseBabbel;
@@ -292,6 +302,27 @@ class CVON_VONGameModeComponent: SCR_BaseGameModeComponent
 	//This makes it so only the players that need to get the VONEntry get it, saving on that sweet sweet sweet network.
 	//Broadcasts are only tracked on the clients, server doesn't track it anywhere.
 	//==========================================================================================================================================================================
+	//Range a Game Master's radio reaches with m_bGameMasterUnlimitedRadio: far enough that distance never counts
+	static const float GAME_MASTER_RADIO_RANGE = 1000000;
+
+	//Is this player a Game Master with the full editor open (not a limited one like the Lobby's Tactical Camera)
+	static bool IsGameMasterEditing(int playerId)
+	{
+		SCR_EditorManagerCore core = SCR_EditorManagerCore.Cast(SCR_EditorManagerCore.GetInstance(SCR_EditorManagerCore));
+		if (!core)
+			return false;
+		SCR_EditorManagerEntity editor = core.GetEditorManager(playerId);
+		return editor && editor.IsOpened() && !editor.IsLimited();
+	}
+
+	//How far a call on this radio from this player reaches: its power setting, or unlimited for a Game Master
+	float SenderRadioRange(CVON_RadioComponent radioComp, int playerId)
+	{
+		if (m_bGameMasterUnlimitedRadio && IsGameMasterEditing(playerId))
+			return GAME_MASTER_RADIO_RANGE;
+		return radioComp.GetTransmitRange();
+	}
+
 	void AddLocalVONBroadcasts(CVON_VONContainer VONContainer, int playerIdToAdd, RplId radioId)
 	{
 		float maxDist = 0;
@@ -311,7 +342,7 @@ class CVON_VONGameModeComponent: SCR_BaseGameModeComponent
 			if (!radioComp)
 				return;
 
-			maxDist = radioComp.GetTransmitRange();
+			maxDist = SenderRadioRange(radioComp, playerIdToAdd);
 		}
 
 		PlayerManager pm = GetGame().GetPlayerManager();

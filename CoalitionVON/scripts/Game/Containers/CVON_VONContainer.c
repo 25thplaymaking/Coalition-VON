@@ -50,7 +50,7 @@ class CVON_VONContainer
 	float m_fConnectionQuality;
 
 	//Radio calls: metres of terrain above the straight line between sender and our radios, and when to
-	//sample it again (SCR_VONController.TerrainObstruction). Listener only, not replicated.
+	//sample it again (SCR_VONController.TerrainRangeLoss: share of the radio's range lost). Listener only, not replicated.
 	float m_fTerrainObstruction = 0;
 	float m_fNextTerrainTime = 0;
 	

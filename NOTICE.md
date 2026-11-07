@@ -41,6 +41,9 @@ Coalition VON on a server: do not load both.
   backlight, volume keys, four-line display), net names on channels, and a new radio pop-up.
 - Transmit power LOW / MED / HIGH on every radio, changing how far calls reach.
 - TX / RX marker and signal-strength bars on the radio displays.
+- Terrain now takes a share of a radio's range, a 0.3 s release tail on radio keys, a radio key spam lock,
+  and unlimited radio range for Game Masters in the editor. Ideas from Lima Charlie's documentation;
+  no Lima Charlie code or files are used (its repository has no licence).
 
 See [docs/BIFROST_CHANGES.md](docs/BIFROST_CHANGES.md) for details and the TFAR comparison.
 
@@ -52,6 +55,13 @@ Paste this at the end of the Workshop description on every release:
 > contributors), used under the Arma Public License (APL). Original: Workshop item
 > 6624E618B9058265, https://github.com/CoalitionArma/Coalition-VON. Not endorsed by
 > CoalitionArma. Non-commercial, Arma only.
+
+## Ideas credited
+
+- **Lima Charlie** by IPS-Keystone, https://github.com/IPS-Keystone/Lima-Charlie: the terrain range
+  model, release tail, key spam lock and Game Master radio range follow behaviour its documentation
+  describes. Our own code; nothing copied.
+- **TFAR** and **ACRE2**: features re-implemented from how they behave in game; no code or files used.
 
 ## Third-party code
 - cJSON, Copyright (c) 2009-2017 Dave Gamble and cJSON contributors, MIT License (text kept

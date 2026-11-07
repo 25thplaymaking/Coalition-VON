@@ -44,8 +44,8 @@ license: [NOTICE.md](../NOTICE.md), [LICENSE.md](../LICENSE.md).
 - **Caller name on the radio pop-up.** When a call comes in, the radio pop-up opens on the radio that
   hears it (channel, frequency, ear) with the talker's name on a new line. It yields for 1.5 s after
   you use your own radio keys; your own transmission always wins.
-- **Terrain interference.** Hills and ridges between two radios weaken the call (more static, then
-  nothing), like TFAR. High ground clears them.
+- **Terrain.** Hills and ridges between two radios shrink the sender's range, so a call behind a ridge
+  gets more static, then nothing. High ground clears them. (Reworked later; see "Ideas from Lima Charlie".)
 - **Voice directivity.** A voice is up to 5 dB quieter behind the talker than in front.
 - **Handheld radio on speaker.** "Toggle Radio Speaker" (Left Ctrl + End) also works on your active
   handheld radio when you have no vehicle radio or manpack, so people nearby hear the net.
@@ -107,8 +107,37 @@ Each radio keeps its own picture; its keys and screen were rebuilt (`CVON_RadioM
 |---|---|---|
 | `m_bAutoFillVehicleRadios` | on | Vehicle radios take the crew's key when they get in |
 | `m_bShowRadioCallerName` | on | Incoming-call pop-up with the talker's name |
-| `m_fTerrainInterference` | 7 | Extra signal metres per metre of terrain in the way; 0 = off |
+| `m_fTerrainEffect` | 1 | Scales every hill's height for the terrain model (2 = a 30 m hill counts as 60 m); 0 = off |
+| `m_bRadioKeySpamLock` | on | More than 4 radio key presses in 4 s locks the radio keys for 2 s |
+| `m_bGameMasterUnlimitedRadio` | on | Game Masters with the editor open transmit and receive radio with no range or terrain limit |
 | `m_bHandheldSpeakers` | on | Handheld radios can go on speaker |
+
+### Ideas from Lima Charlie
+
+[Lima Charlie](https://github.com/IPS-Keystone/Lima-Charlie) (IPS-Keystone) is another TeamSpeak radio
+mod for Reforger. Its repository has no licence, so none of its code, sounds or files are used. These are
+our own implementations of behaviour its release notes and documentation describe:
+
+- **Terrain takes a share of the range.** Replaces the TFAR-style "extra metres per metre of hill". The
+  ground is sampled every 25 m along the line between the two radios. Each hill above that line takes a
+  share of the sender's range that grows with its height (at most 80% for one hill), and several hills
+  each take their share of what is left (at most 90% together). A ridge costs a 5 km handheld and a 20 km
+  set the same share, so long range sets still reach far behind it. Examples: a 30 m hill takes 22%, a
+  60 m hill 37%, a 120 m hill 57%, a 30 m and a 60 m hill together 51%.
+- **Release tail.** A radio call ends 0.3 s after you let go of the key, so the end of your last word still
+  goes out. Pressing the same radio's key again inside that 0.3 s carries on the same call, so a stutter on
+  the key doesn't send a new pair of beeps.
+- **Radio key spam lock.** More than four radio key presses in four seconds locks the radio keys for two
+  seconds, with a deny sound and a hint.
+- **Game Master radio.** With the editor open, a Game Master's calls reach everyone on the net and every
+  call on their radios comes through clear, wherever the camera or body is.
+- **Checked, no change needed:** Lima Charlie found Reforger stops writing its files when alt-tabbed. Ours
+  kept writing its heartbeat in a muted test both unfocused and minimized, so alt-tabbing does not drop you
+  out of the TeamSpeak channel (tested in a local game, not on a multiplayer client).
+
+Not taken (yet), best first: room-by-room voice muffling and room echo, trees and thin props not muffling
+voices, a join-time status notice (plugin, TeamSpeak, mic, channel), half duplex per radio, beeps only
+inside 90% of range, enemy AI turning toward voices, coloured net names.
 
 ## TFAR comparison
 
@@ -142,9 +171,12 @@ code is used.
 - Muted off-screen game self-test (48 checks, all passed): plugin version rules, defaults, 5 kHz
   frequencies, monitor channel routing rules, ear cycling, respawn keys, settings kept through death,
   voice directivity, terrain sampling, and the incoming-call pop-up text.
-- Keypad, display, TX power and signal bars: muted off-screen self-test, 152 checks, all passed (every PRC-152 key on
+- Keypad, display, TX power, signal bars and the Lima Charlie ideas: muted off-screen self-test, 174 checks,
+  all passed (every PRC-152 key on
   the home, OPT, edit and PGM screens, number pad and Backspace, power, the frequency reaching the server,
   TX power LOW / MED / HIGH and the range each gives, the R / T marker and bars for a call and a transmission,
+  terrain shares for one and several hills, the key spam lock, the release tail, Game Master range with the
+  editor closed and open,
   and the VOL keys, options and help legend on the other four radios). Screenshots of every radio's home
   screen, help overlay and backlight, plus the PRC-152 OPT and PGM screens, checked by eye.
 - **Not tested here (needs players and TeamSpeak):** hearing the monitored net, the pop-up during a real
