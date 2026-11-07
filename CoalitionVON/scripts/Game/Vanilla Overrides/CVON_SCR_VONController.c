@@ -61,10 +61,6 @@ modded class SCR_VONController
 
 	bool m_bFirstConnect = false;
 
-	//Once per session: the player's TeamSpeak plugin works but is older than the one this build ships with
-	bool m_bPluginUpdateHintShown = false;
-
-
 	//All these below are just how we assign keybinds to activate certain VON Transmissions
 	//==========================================================================================================================================================================
 	void ActivateCVONSR()
@@ -751,6 +747,20 @@ modded class SCR_VONController
 	bool m_bPluginReportsTalking = false;
 	// TeamSpeak client IDs currently talking (VONTalking.json). Without it everyone counts as talking.
 	ref set<int> m_TalkingClientIds = new set<int>();
+	// A running plugin wrote VONPluginInfo.json, and the player's TeamSpeak state it reported: 0 or 1,
+	// or -1 when the plugin doesn't say (older plugins)
+	bool m_bPluginRunning = false;
+	int m_iPluginConnected = -1;
+	int m_iPluginInChannel = -1;
+	int m_iPluginMicMuted = -1;
+	int m_iPluginSoundMuted = -1;
+
+	// Join status notice (an idea from Lima Charlie): one hint a few seconds after you first spawn on the
+	// server, saying whether the plugin, TeamSpeak, the VON channel, your mic and your sound are ready
+	static const float JOIN_NOTICE_DELAY = 5;		// seconds after spawning before the notice
+	static const float JOIN_NOTICE_WAIT = 15;		// how long a problem may take to clear (the plugin moving you) before it's reported
+	bool m_bJoinNoticeShown = false;
+	float m_fJoinNoticeStart = -1;
 
 	// Liveness signal for the TeamSpeak plugin. If the game crashes the destructor never runs, so the
 	// plugin can't be told we left; instead it watches this file and, once it stops updating, releases
@@ -834,6 +844,7 @@ modded class SCR_VONController
 		{
 			m_fNextPluginFiles = m_fTime + PLUGIN_FILES_INTERVAL;
 			ReadPluginFiles();
+			UpdateJoinNotice();
 		}
 
 		if (m_fTime >= m_fNextReceivePopup)
@@ -1286,6 +1297,11 @@ modded class SCR_VONController
 	{
 		bool binary = false;
 		bool talking = false;
+		bool running = false;
+		int connected = -1;
+		int inChannel = -1;
+		int micMuted = -1;
+		int soundMuted = -1;
 		SCR_JsonLoadContext info = new SCR_JsonLoadContext();
 		if (info.LoadFromFile(PLUGIN_INFO_FILE))
 		{
@@ -1298,10 +1314,25 @@ modded class SCR_VONController
 			int age = System.GetUnixTime() - writtenAt;
 			if (age >= -5 && age <= PLUGIN_INFO_MAX_AGE)
 			{
+				running = true;
 				binary = features.Contains("bin1");
 				talking = features.Contains("talking1");
+				// The player's TeamSpeak state (Bifrost VON plugin); an older plugin leaves these at -1
+				if (!info.ReadValue("Connected", connected))
+					connected = -1;
+				if (!info.ReadValue("InChannel", inChannel))
+					inChannel = -1;
+				if (!info.ReadValue("MicMuted", micMuted))
+					micMuted = -1;
+				if (!info.ReadValue("SoundMuted", soundMuted))
+					soundMuted = -1;
 			}
 		}
+		m_bPluginRunning = running;
+		m_iPluginConnected = connected;
+		m_iPluginInChannel = inChannel;
+		m_iPluginMicMuted = micMuted;
+		m_iPluginSoundMuted = soundMuted;
 		m_bPluginReadsBinary = binary;
 		m_bPluginReportsTalking = talking;
 
@@ -1319,6 +1350,82 @@ modded class SCR_VONController
 		talkingLoad.ReadValue("Talking", clientIds);
 		foreach (int clientId: clientIds)
 			m_TalkingClientIds.Insert(clientId);
+	}
+
+	//Shows the join status notice once, JOIN_NOTICE_DELAY after the first spawn; a problem gets until
+	//JOIN_NOTICE_WAIT to clear before it is reported
+	void UpdateJoinNotice()
+	{
+		if (m_bJoinNoticeShown || !m_PlayerController)
+			return;
+		if (m_fJoinNoticeStart < 0)
+			m_fJoinNoticeStart = m_fTime;
+		float waited = m_fTime - m_fJoinNoticeStart;
+		if (waited < JOIN_NOTICE_DELAY)
+			return;
+
+		bool ready;
+		string text = JoinNoticeFromState(ready);
+		if (!ready && waited < JOIN_NOTICE_WAIT)
+			return;
+
+		m_bJoinNoticeShown = true;
+		float duration = 15;
+		if (ready)
+			duration = 6;
+		SCR_HintManagerComponent.ShowCustomHint(text, "Bifrost VON", duration);
+	}
+
+	string JoinNoticeFromState(out bool ready)
+	{
+		string version = m_PlayerController.m_sTeamspeakPluginVersion;
+		bool detected = m_bPluginRunning || m_PlayerController.GetTeamspeakClientId() != 0;
+		return JoinNoticeText(detected, version, m_VONGameModeComponent.m_sTeamspeakPluginVersion,
+			m_VONGameModeComponent.IsPluginCompatible(version), m_VONGameModeComponent.IsPluginCurrent(version),
+			m_VONGameModeComponent.m_sTeamSpeakChannelName != "",
+			m_iPluginConnected, m_iPluginInChannel, m_iPluginMicMuted, m_iPluginSoundMuted, ready);
+	}
+
+	//The notice's text. ready = nothing to fix. The state values are 0 / 1, or -1 when the plugin doesn't say.
+	static string JoinNoticeText(bool detected, string version, string wantedVersion, bool compatible, bool current, bool serverHasChannel,
+		int connected, int inChannel, int micMuted, int soundMuted, out bool ready)
+	{
+		ready = false;
+		if (!detected)
+			return "Bifrost VON is running, but the TeamSpeak plugin was not detected. Install the Bifrost VON plugin " + wantedVersion + " and start TeamSpeak.";
+		if (!compatible)
+			return string.Format("Bifrost VON is running, but your TeamSpeak plugin %1 is too old for this server. Install the Bifrost VON plugin %2.", version, wantedVersion);
+
+		array<string> problems = {};
+		if (connected == 0)
+			problems.Insert("TeamSpeak is not connected to a server.");
+		else
+		{
+			if (serverHasChannel && inChannel == 0)
+				problems.Insert("You are not in the VON channel. If TeamSpeak doesn't move you, ask staff to check your channel rights.");
+			if (micMuted == 1)
+				problems.Insert("Your microphone is muted in TeamSpeak.");
+			if (soundMuted == 1)
+				problems.Insert("Your sound is muted in TeamSpeak.");
+		}
+		if (!current)
+			problems.Insert(string.Format("Your TeamSpeak plugin is %1. Install the Bifrost VON plugin %2 so radio ears play on the correct side.", version, wantedVersion));
+
+		if (problems.IsEmpty())
+		{
+			ready = true;
+			string readyText = "Bifrost VON is running. Plugin " + version + ".";
+			if (inChannel == 1)
+				readyText += " You are in the VON channel.";
+			if (micMuted == 0 && soundMuted == 0)
+				readyText += " Mic and sound are on.";
+			return readyText;
+		}
+
+		string problemText = "Bifrost VON is running, but:";
+		foreach (string problem: problems)
+			problemText += "\n- " + problem;
+		return problemText;
 	}
 
 	bool IsTalking(int clientId)
@@ -1766,10 +1873,63 @@ modded class SCR_VONController
 		return false;
 	}
 
+	//Line of sight for a voice: only what really blocks a voice counts (see LetsVoiceThrough)
 	bool CanPlayerSeeSender(IEntity senderEntity, IEntity player)
 	{
-		float distance = TraceOcclusion(GetHeadHeight(senderEntity), GetHeadHeight(player), player, null);
+		float distance = TraceVoiceLine(GetHeadHeight(senderEntity), GetHeadHeight(player), player);
 		return distance == 1;
+	}
+
+	float TraceVoiceLine(vector start, vector end, IEntity exclude)
+	{
+		m_TraceParam.Start = start;
+		m_TraceParam.End = end;
+		m_TraceParam.Exclude = exclude;
+		m_TraceParam.ExcludeArray = null;
+		m_TraceParam.Flags = TraceFlags.DEFAULT | TraceFlags.ANY_CONTACT;
+		m_TraceParam.LayerMask = EPhysicsLayerDefs.Projectile;
+		m_TraceParam.TraceEnt = null;
+		return GetGame().GetWorld().TraceMove(m_TraceParam, BlocksVoice);
+	}
+
+	//Trace filter: true when the entity blocks a voice
+	bool BlocksVoice(notnull IEntity e, vector start = "0 0 0", vector dir = "0 0 0")
+	{
+		return !LetsVoiceThrough(e);
+	}
+
+	//Free-standing props narrower than this on both sides don't muffle a voice
+	static const float THIN_PROP_WIDTH = 1.0;
+
+	//Things a voice carries past without being muffled (an idea from Lima Charlie): people and the gear on
+	//them, trees, bushes and fallen branches, power poles and lines, see-through fences and barriers, and
+	//small free-standing props. Parts of a building or vehicle (doors, windows) always block.
+	static bool LetsVoiceThrough(IEntity e)
+	{
+		if (!e)
+			return true;
+		IEntity root = e.GetRootParent();
+		if (ChimeraCharacter.Cast(root))
+			return true;
+		if (BaseTree.Cast(e) || TreeEntity.Cast(e) || SCR_TreeDebrisSmallEntity.Cast(e))
+			return true;
+		if (PowerPoleEntity.Cast(e) || PowerlineEntity.Cast(e))
+			return true;
+		if (root != e)
+			return false;
+
+		EntityPrefabData prefabData = e.GetPrefabData();
+		if (prefabData)
+		{
+			string prefab = prefabData.GetPrefabName();
+			if (prefab.Contains("Fence") || prefab.Contains("BarbedWire") || prefab.Contains("Crashbarrier"))
+				return true;
+		}
+
+		vector mins, maxs;
+		e.GetBounds(mins, maxs);
+		float width = Math.Max(maxs[0] - mins[0], maxs[2] - mins[2]) * e.GetScale();
+		return width > 0 && width < THIN_PROP_WIDTH;
 	}
 
 	void DetermineHearingWindow(IEntity entity, out float top, out float bottom)
@@ -2062,12 +2222,8 @@ modded class SCR_VONController
 
 				VONLoad.EndObject();
 
-				//An older plugin (e.g. the Coalition build) still works, it only misses the Bifrost fixes
-				if (!m_bPluginUpdateHintShown && TSClientId != 0 && m_VONGameModeComponent.IsPluginCompatible(m_PlayerController.m_sTeamspeakPluginVersion) && !m_VONGameModeComponent.IsPluginCurrent(m_PlayerController.m_sTeamspeakPluginVersion))
-				{
-					m_bPluginUpdateHintShown = true;
-					SCR_HintManagerComponent.ShowCustomHint(string.Format("Your TeamSpeak plugin is version %1. Install the Bifrost VON plugin %2 so radio ears play on the correct side.", m_PlayerController.m_sTeamspeakPluginVersion, m_VONGameModeComponent.m_sTeamspeakPluginVersion), "Bifrost VON", 12);
-				}
+				//An older plugin (e.g. the Coalition build) still works, it only misses the Bifrost fixes: the
+				//join status notice (UpdateJoinNotice) tells the player to update it
 
 				if (gameName == "" || ChannelName != m_VONGameModeComponent.m_sTeamSpeakChannelName || ChannelPassword != m_VONGameModeComponent.m_sTeamSpeakChannelPassword || !m_VONGameModeComponent.IsPluginCompatible(m_PlayerController.m_sTeamspeakPluginVersion) || InGame != true)
 				{

@@ -44,6 +44,8 @@ Coalition VON on a server: do not load both.
 - Terrain now takes a share of a radio's range, a 0.3 s release tail on radio keys, a radio key spam lock,
   and unlimited radio range for Game Masters in the editor. Ideas from Lima Charlie's documentation;
   no Lima Charlie code or files are used (its repository has no licence).
+- A join status notice (plugin, TeamSpeak, VON channel, mic and sound), with the plugin reporting that
+  state, and trees, people, fences and thin props no longer muffling voices. Also ideas from Lima Charlie.
 
 See [docs/BIFROST_CHANGES.md](docs/BIFROST_CHANGES.md) for details and the TFAR comparison.
 
@@ -59,7 +61,8 @@ Paste this at the end of the Workshop description on every release:
 ## Ideas credited
 
 - **Lima Charlie** by IPS-Keystone, https://github.com/IPS-Keystone/Lima-Charlie: the terrain range
-  model, release tail, key spam lock and Game Master radio range follow behaviour its documentation
+  model, release tail, key spam lock, Game Master radio range, join status notice and what voices pass
+  without muffling follow behaviour its documentation
   describes. Our own code; nothing copied.
 - **TFAR** and **ACRE2**: features re-implemented from how they behave in game; no code or files used.
 

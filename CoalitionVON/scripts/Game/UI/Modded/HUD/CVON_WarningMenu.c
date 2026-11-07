@@ -30,7 +30,12 @@ class CVON_WarningMenu: ChimeraMenuBase
 		super.OnMenuUpdate(tDelta);
 		if (m_PlayerController.GetTeamspeakClientId() == 0)
 		{
-			m_wExplanation.SetText("Teamspeak Plugin Not Detected!");
+			//A running plugin says whether TeamSpeak itself is connected, so "not detected" isn't shown wrongly
+			SCR_VONController von = SCR_VONController.Cast(m_PlayerController.FindComponent(SCR_VONController));
+			if (von && von.m_bPluginRunning && von.m_iPluginConnected == 0)
+				m_wExplanation.SetText("TeamSpeak is not connected to a server!");
+			else
+				m_wExplanation.SetText("Teamspeak Plugin Not Detected!");
 		}
 		else if (!m_VONGamemode.IsPluginCompatible(m_PlayerController.m_sTeamspeakPluginVersion))
 		{

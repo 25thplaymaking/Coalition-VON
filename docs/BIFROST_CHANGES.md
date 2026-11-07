@@ -134,9 +134,24 @@ our own implementations of behaviour its release notes and documentation describ
 - **Checked, no change needed:** Lima Charlie found Reforger stops writing its files when alt-tabbed. Ours
   kept writing its heartbeat in a muted test both unfocused and minimized, so alt-tabbing does not drop you
   out of the TeamSpeak channel (tested in a local game, not on a multiplayer client).
+- **Join status notice.** Five seconds after you first spawn on the server, one hint says whether you are
+  ready: Bifrost VON running, the plugin version, TeamSpeak connected, in the VON channel, mic and sound on.
+  If something is wrong it waits up to 15 s for it to clear (the plugin moving you into the channel), then
+  lists each problem on its own line: plugin missing or too old, TeamSpeak not connected, not in the VON
+  channel, microphone muted, sound muted, or an older plugin that should be updated. Shown once per join.
+  The plugin now writes this state to `VONPluginInfo.json` (`Connected`, `InChannel`, `MicMuted`,
+  `SoundMuted`), straight away when it changes. With an older plugin the notice only reports what it can
+  know. It replaces the separate "update your plugin" hint, and the "plugin not detected" screen now says
+  "TeamSpeak is not connected to a server" when the plugin runs but TeamSpeak isn't connected.
+- **Trees and thin props don't muffle voices.** Muffling starts from a line of sight between the talker's
+  head and yours; anything on that line used to count as a wall. Now these are skipped: people and the
+  gear they wear (including the talker's own helmet), trees, bushes and fallen branches, power poles and
+  lines, see-through fences and barriers (prefab names with Fence, BarbedWire or Crashbarrier), and
+  free-standing props under 1 m on both sides (barrels, posts, signs). Doors, windows and other parts of a
+  building or vehicle always block, whatever their size, as do walls. This matters when one of you is in a
+  building or vehicle: a tree or a barrel between you no longer muffles you as if a wall were there.
 
-Not taken (yet), best first: room-by-room voice muffling and room echo, trees and thin props not muffling
-voices, a join-time status notice (plugin, TeamSpeak, mic, channel), half duplex per radio, beeps only
+Not taken (yet), best first: room-by-room voice muffling and room echo, half duplex per radio, beeps only
 inside 90% of range, enemy AI turning toward voices, coloured net names.
 
 ## TFAR comparison
@@ -155,7 +170,7 @@ code is used.
 | Terrain interference / high-ground advantage | No | Added |
 | Directional voice | No | Added |
 | Whisper / normal / yell | Has (5 levels) | |
-| Muffling inside buildings and vehicles | Has | |
+| Muffling inside buildings and vehicles | Has | Trees, people, fences and thin props no longer muffle |
 | Signal quality as static | Has | |
 | Underwater: radios dead, voices muffled | No | **Not ported** (needs an in-game check of Reforger's water API) |
 | Separate crew and passenger intercom channels | Passengers on/off only | **Not ported** |
@@ -165,7 +180,8 @@ code is used.
 
 ## What was tested, and what wasn't
 
-- Plugin builds (MSBuild, Release x64). Ear-routing test: 10/10 (original: 5/10).
+- Plugin builds (MSBuild, Release x64). Ear-routing test: 10/10 (original: 5/10). Plugin state test
+  (`tests/test_plugin_info.c`, the join notice's `VONPluginInfo.json` fields and the rewrite on change): 11/11.
 - Mod compiles in Workbench 1.9.0.37 with zero errors.
 - Play mode on `VONTestBasic` with the Game Master editor open: no script errors.
 - Muted off-screen game self-test (48 checks, all passed): plugin version rules, defaults, 5 kHz
@@ -179,6 +195,11 @@ code is used.
   editor closed and open,
   and the VOL keys, options and help legend on the other four radios). Screenshots of every radio's home
   screen, help overlay and backlight, plus the PRC-152 OPT and PGM screens, checked by eye.
+- Join status notice and voice muffling: the same self-test, now 207 checks, all passed (the notice text
+  for every state, reading the plugin's file from a current plugin, an older one and a stale one, the 5 s
+  delay, the 15 s wait for a problem, shown once; a real tree, net fence, barrel and rifleman placed in the
+  world let a voice line through while a concrete wall stops it, and a small prop fixed to the wall still
+  blocks). Screenshots of the notice, ready and with problems, checked by eye.
 - **Not tested here (needs players and TeamSpeak):** hearing the monitored net, the pop-up during a real
   call, auto key fill with real crews, handheld speaker heard by others, terrain static in a real call.
 

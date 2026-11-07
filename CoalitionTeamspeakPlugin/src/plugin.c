@@ -2417,12 +2417,56 @@ static void write_text_file(const char* path, const char* text)
     fclose(f);
 }
 
-static void write_plugin_info(void)
+/* The player's TeamSpeak state, for the game's join notice. Each value is 0 or 1. */
+typedef struct {
+    int connected;  /* the active server tab is connected to a server */
+    int inChannel;  /* we are in the game's VON channel */
+    int micMuted;   /* the player's own microphone mute in TeamSpeak */
+    int soundMuted; /* the player's own speaker mute in TeamSpeak */
+} PluginState;
+
+static PluginState g_lastInfoState = {-1, -1, -1, -1};
+
+static void read_plugin_state(uint64 sch, PluginState* st)
 {
-    char buf[256];
-    _snprintf(buf, sizeof(buf), "{\"Version\":\"%s\",\"Features\":\"%s\",\"Time\":%lld}", ts3plugin_version(), PLUGIN_FEATURES, (long long)_time64(NULL));
-    buf[sizeof(buf) - 1] = '\0';
+    memset(st, 0, sizeof(*st));
+    int status = 0;
+    if (!sch || ts3Functions.getConnectionStatus(sch, &status) != ERROR_ok || status != STATUS_CONNECTION_ESTABLISHED)
+        return;
+    st->connected = 1;
+    st->inChannel = InterlockedCompareExchange(&g_inVonActiveFlag, 0, 0) ? 1 : 0;
+    int v = 0;
+    if (ts3Functions.getClientSelfVariableAsInt(sch, CLIENT_INPUT_MUTED, &v) == ERROR_ok)
+        st->micMuted = v ? 1 : 0;
+    v = 0;
+    if (ts3Functions.getClientSelfVariableAsInt(sch, CLIENT_OUTPUT_MUTED, &v) == ERROR_ok)
+        st->soundMuted = v ? 1 : 0;
+}
+
+static void format_plugin_info(char* buf, size_t size, const char* version, const char* features, long long now, const PluginState* st)
+{
+    _snprintf(buf, size, "{\"Version\":\"%s\",\"Features\":\"%s\",\"Time\":%lld,\"Connected\":%d,\"InChannel\":%d,\"MicMuted\":%d,\"SoundMuted\":%d}",
+              version, features, now, st->connected, st->inChannel, st->micMuted, st->soundMuted);
+    buf[size - 1] = '\0';
+}
+
+static void write_plugin_info(uint64 sch)
+{
+    PluginState st;
+    read_plugin_state(sch, &st);
+    char buf[384];
+    format_plugin_info(buf, sizeof(buf), ts3plugin_version(), PLUGIN_FEATURES, (long long)_time64(NULL), &st);
     write_text_file(g_InfoPath, buf);
+    g_lastInfoState = st;
+}
+
+/* Rewrites VONPluginInfo.json straight away when the player's TeamSpeak state changes */
+static void write_plugin_info_if_state_changed(uint64 sch)
+{
+    PluginState st;
+    read_plugin_state(sch, &st);
+    if (memcmp(&st, &g_lastInfoState, sizeof(st)) != 0)
+        write_plugin_info(sch);
 }
 
 static void set_talking(anyID clientID, int talking)
@@ -2748,7 +2792,7 @@ static unsigned long WINAPI worker_main(LPVOID param)
 
         if (now >= g_nextInfoWriteTick) {
             g_nextInfoWriteTick = now + INFO_WRITE_MS;
-            write_plugin_info();
+            write_plugin_info(sch);
         }
 
         /* ---------------- Slow path ---------------- */
@@ -2760,6 +2804,7 @@ static unsigned long WINAPI worker_main(LPVOID param)
             try_ensure_move(sch);
             try_return_to_previous(sch);
             update_von_active_flag(sch);
+            write_plugin_info_if_state_changed(sch);
 
             /* What other players see in TeamSpeak's info panel when they select us */
             int state = CVON_STATE_NOT_IN_GAME;
@@ -2905,7 +2950,7 @@ PLUGINS_EXPORTDLL int ts3plugin_init()
 
     read_serverdata_from_disk();
     write_serverdata_if_changed(0);
-    write_plugin_info();
+    write_plugin_info(ts3Functions.getCurrentServerConnectionHandlerID());
 
     InterlockedExchange(&g_workerQuit, 0);
     g_quitEvent    = CreateEventA(NULL, TRUE, FALSE, NULL);
