@@ -68,8 +68,14 @@ Each radio keeps its own picture; its keys and screen were rebuilt (`CVON_RadioM
 - **R-168 and R-187:** + / - (the up and down arrows on the R-187) step channels; the bottom-row keys
   (R-168) and top soft keys (R-187) open the options; the red / green keys clear and store; digits type a
   frequency; the R-168 volume knob (left half down, right half up) and the R-187 side keys set volume.
-- **Options (OPT):** volume, ear, monitor channel, monitor ear, backlight, clock offset (shown as the
-  radio's time, HH:MM).
+- **Options (OPT):** volume, transmit power, ear, monitor channel, monitor ear, backlight, clock offset
+  (shown as the radio's time, HH:MM).
+- **Transmit power LOW / MED / HIGH.** Sets how far your calls reach: HIGH is the radio's full range (as
+  before, and the default), MED half, LOW a quarter (PRC-152: 5 km, 2.5 km, 1.3 km). The OPT entry shows
+  the range for each step, and the home screen shows H, M or L like the real Harris displays. Kept through
+  respawn with the other radio settings. The server uses the sender's power when it works out who hears
+  the call. Per radio prefab: `m_fMediumPowerRange` (0.5) and `m_fLowPowerRange` (0.25). Range grows
+  roughly with the square root of power, so a quarter of the range is about a sixteenth of the power.
 - **Keyboard:** the number pad types a frequency straight away; Backspace works like CLR.
 - **Help overlay:** labels now name the new functions, with a short legend for the function keys.
 - **Host fix:** on the machine hosting a game, the power knob used to flip twice and do nothing; it now
@@ -119,6 +125,7 @@ code is used.
 | Signal quality as static | Has | |
 | Underwater: radios dead, voices muffled | No | **Not ported** (needs an in-game check of Reforger's water API) |
 | Separate crew and passenger intercom channels | Passengers on/off only | **Not ported** |
+| Transmit power setting (ACRE, RHS) | No | Added (LOW / MED / HIGH) |
 | Diver radio | No | **Not ported** (no diving gear in our modset) |
 
 ## What was tested, and what wasn't
@@ -129,8 +136,9 @@ code is used.
 - Muted off-screen game self-test (48 checks, all passed): plugin version rules, defaults, 5 kHz
   frequencies, monitor channel routing rules, ear cycling, respawn keys, settings kept through death,
   voice directivity, terrain sampling, and the incoming-call pop-up text.
-- Keypad and display rework: muted off-screen self-test, 127 checks, all passed (every PRC-152 key on
+- Keypad, display and TX power: muted off-screen self-test, 139 checks, all passed (every PRC-152 key on
   the home, OPT, edit and PGM screens, number pad and Backspace, power, the frequency reaching the server,
+  TX power LOW / MED / HIGH and the range each gives,
   and the VOL keys, options and help legend on the other four radios). Screenshots of every radio's home
   screen, help overlay and backlight, plus the PRC-152 OPT and PGM screens, checked by eye.
 - **Not tested here (needs players and TeamSpeak):** hearing the monitored net, the pop-up during a real

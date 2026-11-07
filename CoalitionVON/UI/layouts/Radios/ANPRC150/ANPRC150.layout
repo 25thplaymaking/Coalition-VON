@@ -820,7 +820,7 @@ FrameWidgetClass {
       OffsetBottom 459
      }
      Color 1 1 1 1
-     Text "7 OPT  options: ears, monitor, light, clock"
+     Text "7 OPT  options: power, ears, monitor, light, clock"
      "Font Size" 26
      "Min Font Size" 18
      "Horizontal Alignment" Left

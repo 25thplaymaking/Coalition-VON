@@ -29,6 +29,7 @@ enum CVON_ERadioScreen
 enum CVON_ERadioOption
 {
 	VOLUME,
+	TX_POWER,		//transmit power LOW / MED / HIGH (CVON_RadioComponent.m_iTxPower)
 	EAR,
 	MONITOR,		//second channel heard at the same time (CVON_RadioComponent.m_iMonitorChannel)
 	MONITOR_EAR,	//...and its ear
@@ -51,7 +52,7 @@ class CVON_RadioMenu: MenuBase
 	static const float FLASH_TIME = 0.12;		//seconds a pressed key stays darkened
 	static const float PENDING_TIME = 1.5;		//seconds a new preset/frequency is shown before the server confirms it
 	static const float BLINK_TIME = 0.4;		//edit cursor blink
-	static const int OPTION_COUNT = 6;
+	static const int OPTION_COUNT = 7;
 	static const int CLOCK_LIMIT = 99;			//clock offset range, minutes either way
 	static const int LAST_CHANNEL = 99;
 
@@ -270,6 +271,9 @@ class CVON_RadioMenu: MenuBase
 			return;
 
 		AudioSystem.PlaySound(KEY_CLICK);
+		//The next key press clears a message (on small screens it covers the name line)
+		m_sMessage = "";
+		m_fMessageTimer = 0;
 
 		if (key == "VolUp" || key == "VolDown")
 		{
@@ -485,6 +489,7 @@ class CVON_RadioMenu: MenuBase
 		switch (option)
 		{
 			case CVON_ERadioOption.VOLUME: {return m_RadioComponent.m_iVolume;}
+			case CVON_ERadioOption.TX_POWER: {return m_RadioComponent.m_iTxPower;}
 			case CVON_ERadioOption.EAR: {return m_RadioComponent.m_eStereo;}
 			case CVON_ERadioOption.MONITOR: {return m_RadioComponent.m_iMonitorChannel;}
 			case CVON_ERadioOption.MONITOR_EAR: {return m_RadioComponent.m_eMonitorStereo;}
@@ -504,6 +509,7 @@ class CVON_RadioMenu: MenuBase
 		switch (option)
 		{
 			case CVON_ERadioOption.VOLUME: {return Math.ClampInt(value + direction, 0, 9);}
+			case CVON_ERadioOption.TX_POWER: {return Math.ClampInt(value + direction, CVON_ETxPower.LOW, CVON_ETxPower.HIGH);}
 			case CVON_ERadioOption.EAR: {return NextStereo(value, direction);}
 			case CVON_ERadioOption.MONITOR: {return NextMonitorChannel(value, direction);}
 			case CVON_ERadioOption.MONITOR_EAR: {return NextStereo(value, direction);}
@@ -535,6 +541,7 @@ class CVON_RadioMenu: MenuBase
 		switch (option)
 		{
 			case CVON_ERadioOption.VOLUME: {SetVolume(value); return;}
+			case CVON_ERadioOption.TX_POWER: {m_RadioComponent.SetTxPowerClient(value); return;}
 			case CVON_ERadioOption.EAR:
 			{
 				m_RadioComponent.m_eStereo = value;
@@ -563,6 +570,7 @@ class CVON_RadioMenu: MenuBase
 		switch (option)
 		{
 			case CVON_ERadioOption.VOLUME: {return "VOLUME";}
+			case CVON_ERadioOption.TX_POWER: {return "TX POWER";}
 			case CVON_ERadioOption.EAR: {return "EAR";}
 			case CVON_ERadioOption.MONITOR: {return "MONITOR";}
 			case CVON_ERadioOption.MONITOR_EAR: {return "MONITOR EAR";}
@@ -577,6 +585,7 @@ class CVON_RadioMenu: MenuBase
 		switch (option)
 		{
 			case CVON_ERadioOption.VOLUME: {return value.ToString();}
+			case CVON_ERadioOption.TX_POWER: {return CVON_RadioComponent.TxPowerText(value) + " " + RangeText(PowerRange(value));}
 			case CVON_ERadioOption.EAR: {return EarText(value);}
 			case CVON_ERadioOption.MONITOR:
 			{
@@ -594,6 +603,39 @@ class CVON_RadioMenu: MenuBase
 			case CVON_ERadioOption.CLOCK: {return ClockText(value);}
 		}
 		return "";
+	}
+
+	//Metres the radio would reach on this power setting
+	float PowerRange(int power)
+	{
+		switch (power)
+		{
+			case CVON_ETxPower.LOW: {return m_RadioComponent.m_iRadioRange * m_RadioComponent.m_fLowPowerRange;}
+			case CVON_ETxPower.MEDIUM: {return m_RadioComponent.m_iRadioRange * m_RadioComponent.m_fMediumPowerRange;}
+		}
+		return m_RadioComponent.m_iRadioRange;
+	}
+
+	//1250 -> "1.3KM", 15000 -> "15KM"
+	static string RangeText(float metres)
+	{
+		int tenths = Math.Round(metres / 100);
+		int whole = tenths / 10;
+		if (tenths >= 100)
+			return whole.ToString() + "KM";
+		int fraction = tenths % 10;
+		return whole.ToString() + "." + fraction.ToString() + "KM";
+	}
+
+	//"L", "M" or "H", as the Harris displays show the power setting
+	static string PowerLetter(int power)
+	{
+		switch (power)
+		{
+			case CVON_ETxPower.LOW: {return "L";}
+			case CVON_ETxPower.MEDIUM: {return "M";}
+		}
+		return "H";
 	}
 
 	//Radio time with an offset in minutes, HH:MM
@@ -774,7 +816,7 @@ class CVON_RadioMenu: MenuBase
 			{
 				int channel = ShownChannel();
 				string frequency = ShownFrequency();
-				status = "P" + PadChannel(channel) + "  " + CryptoText();
+				status = "P" + PadChannel(channel) + "  " + CryptoText() + "  " + PowerLetter(m_RadioComponent.m_iTxPower);
 				statusRight = "VOL " + m_RadioComponent.m_iVolume.ToString();
 				name = m_RadioComponent.GetChannelLabel(frequency);
 				if (name == "")

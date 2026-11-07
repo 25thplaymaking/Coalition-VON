@@ -852,7 +852,7 @@ FrameWidgetClass {
       OffsetBottom 200
      }
      Color 1 1 1 1
-     Text "Top soft keys  options: ears, monitor, light, clock"
+     Text "Top soft keys  options: power, ears, monitor, light, clock"
      "Font Size" 26
      "Min Font Size" 18
      "Horizontal Alignment" Left

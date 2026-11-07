@@ -8,6 +8,14 @@ enum CVON_ERadioType
 	LONG
 }
 
+//Transmit power, like the LOW / MED / HIGH setting on the real radios: how far this radio is heard
+enum CVON_ETxPower
+{
+	LOW,
+	MEDIUM,
+	HIGH
+}
+
 class CVON_RadioComponent: ScriptComponent
 {
 	// What displays on the VON HUD
@@ -16,8 +24,16 @@ class CVON_RadioComponent: ScriptComponent
 	//Used for allocating the frequencies to the radios in the SCR_CallsignBlahBlahsomething. Also is how we sort it out so your active first is always your SR.
 	[Attribute("0", UIWidgets.ComboBox, "Used for sorting frequencies", "", enumType: CVON_ERadioType )] int m_eRadioType;
 
-	//How far it go...
+	//How far it go... (on HIGH power; see m_iTxPower)
 	[Attribute("5000")] int m_iRadioRange;
+
+	//Range on the lower power settings, as a share of m_iRadioRange. Radio range grows roughly with the square
+	//root of power, so a quarter of the range is about 1/16 of the power (5 W HIGH -> about 0.3 W LOW).
+	[Attribute("0.25", desc: "Range on LOW power, as a share of the radio range")] float m_fLowPowerRange;
+	[Attribute("0.5", desc: "Range on MEDIUM power, as a share of the radio range")] float m_fMediumPowerRange;
+
+	//Transmit power (CVON_ETxPower). Replicated: the server reads it when it works out who hears a call.
+	[RplProp()] int m_iTxPower = CVON_ETxPower.HIGH;
 
 	//What can be typed in on the keypad, in kHz. 5 kHz steps take the commo card's 31120 / 31130 style
 	//frequencies; the original only allowed 25 kHz steps (31125, 31150).
@@ -297,6 +313,49 @@ class CVON_RadioComponent: ScriptComponent
 			return name;
 		}
 		return "";
+	}
+
+	//Transmit power
+	//==========================================================================================================================================================================
+	//Metres this radio is heard at on its current power setting
+	float GetTransmitRange()
+	{
+		switch (m_iTxPower)
+		{
+			case CVON_ETxPower.LOW: {return m_iRadioRange * m_fLowPowerRange;}
+			case CVON_ETxPower.MEDIUM: {return m_iRadioRange * m_fMediumPowerRange;}
+		}
+		return m_iRadioRange;
+	}
+
+	static string TxPowerText(int power)
+	{
+		switch (power)
+		{
+			case CVON_ETxPower.LOW: {return "LOW";}
+			case CVON_ETxPower.MEDIUM: {return "MED";}
+		}
+		return "HIGH";
+	}
+
+	//Authority
+	void UpdateTxPowerServer(int power)
+	{
+		m_iTxPower = Math.ClampInt(power, CVON_ETxPower.LOW, CVON_ETxPower.HIGH);
+		Replication.BumpMe();
+	}
+
+	//saveSettings false while settings are being restored
+	void SetTxPowerClient(int power, bool saveSettings = true)
+	{
+		SCR_PlayerController pc = SCR_PlayerController.Cast(GetGame().GetPlayerController());
+		if (!pc)
+			return;
+		pc.UpdateRadioTxPower(power, GetRplId());
+		//Shown straight away; the server's value replicates back
+		m_iTxPower = Math.ClampInt(power, CVON_ETxPower.LOW, CVON_ETxPower.HIGH);
+		if (saveSettings)
+			pc.UpdateSettings();
 	}
 
 	//Does this radio hear a transmission on this frequency: its main channel or the monitored one

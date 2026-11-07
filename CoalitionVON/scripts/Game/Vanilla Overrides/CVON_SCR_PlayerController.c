@@ -9,6 +9,8 @@ class CVON_RadioSettingObject
 	//The monitored channel's frequency and its ear (CVON_RadioComponent.m_iMonitorChannel), "" for none
 	string m_sMonitorFreq = "";
 	CVON_EStereo m_MonitorStereo = CVON_EStereo.BOTH;
+	//Transmit power (CVON_RadioComponent.m_iTxPower)
+	int m_iTxPower = CVON_ETxPower.HIGH;
 }
 
 modded class SCR_PlayerController
@@ -165,6 +167,7 @@ modded class SCR_PlayerController
 			setting.m_sKey = RadioSettingKey(radioComp, nameCounts);
 			setting.m_sMonitorFreq = radioComp.GetMonitorFrequency();
 			setting.m_MonitorStereo = radioComp.m_eMonitorStereo;
+			setting.m_iTxPower = radioComp.m_iTxPower;
 			m_aRadioSettings.Insert(setting);
 		}
 	}
@@ -213,6 +216,8 @@ modded class SCR_PlayerController
 				monitorChannel = radioComp.m_aChannels.Find(setting.m_sMonitorFreq) + 1;
 			if (monitorChannel != radioComp.m_iMonitorChannel)
 				radioComp.SetMonitorChannelClient(monitorChannel, false);
+			if (setting.m_iTxPower != radioComp.m_iTxPower)
+				radioComp.SetTxPowerClient(setting.m_iTxPower, false);
 		}
 	}
 
@@ -763,6 +768,23 @@ modded class SCR_PlayerController
 			return;
 
 		radioComp.UpdateMonitorChannelServer(channel);
+	}
+
+	//Transmit power (CVON_RadioComponent.m_iTxPower)
+	//==========================================================================================================================================================================
+	void UpdateRadioTxPower(int power, RplId radio)
+	{
+		Rpc(RpcAsk_UpdateRadioTxPower, power, radio);
+	}
+
+	[RplRpc(RplChannel.Reliable, RplRcver.Server)]
+	void RpcAsk_UpdateRadioTxPower(int power, RplId radio)
+	{
+		CVON_RadioComponent radioComp = FindRadioComponent(radio);
+		if (!radioComp)
+			return;
+
+		radioComp.UpdateTxPowerServer(power);
 	}
 
 	//==========================================================================================================================================================================

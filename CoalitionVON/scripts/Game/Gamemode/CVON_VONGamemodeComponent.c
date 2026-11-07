@@ -294,7 +294,7 @@ class CVON_VONGameModeComponent: SCR_BaseGameModeComponent
 	//==========================================================================================================================================================================
 	void AddLocalVONBroadcasts(CVON_VONContainer VONContainer, int playerIdToAdd, RplId radioId)
 	{
-		int maxDist = 0;
+		float maxDist = 0;
 		SCR_BaseGameMode gamemode = SCR_BaseGameMode.Cast(GetGame().GetGameMode());
 		if (!gamemode)
 			return;
@@ -311,7 +311,7 @@ class CVON_VONGameModeComponent: SCR_BaseGameModeComponent
 			if (!radioComp)
 				return;
 
-			maxDist = radioComp.m_iRadioRange;
+			maxDist = radioComp.GetTransmitRange();
 		}
 
 		PlayerManager pm = GetGame().GetPlayerManager();
