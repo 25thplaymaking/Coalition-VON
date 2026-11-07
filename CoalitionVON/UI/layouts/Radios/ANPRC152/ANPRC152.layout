@@ -17,23 +17,111 @@ FrameWidgetClass {
    Texture "{5F2DB695536EAE83}UI/layouts/Radios/ANPRC152/data/ANPRC152.edds"
    Size 1 1
   }
-  TextWidgetClass "{662A446ACCCCB119}" {
-   Name "Frequency"
-   Slot FrameWidgetSlot "{662A446ACCCCB08D}" {
+  ImageWidgetClass "{6D6D2AC8D6E33A93}" {
+   Name "LcdGlow"
+   Slot FrameWidgetSlot "{6DE8D5FB8D7B9A2F}" {
     Anchor 0.5 0.5 0.5 0.5
-    PositionX -71.668
-    OffsetLeft -71.668
-    PositionY -84.992
-    OffsetTop -84.992
-    SizeX 145.401
-    OffsetRight -73.733
-    SizeY 30
-    OffsetBottom 54.992
+    PositionX -77
+    OffsetLeft -77
+    PositionY -111
+    OffsetTop -111
+    SizeX 208
+    OffsetRight -131
+    SizeY 62
+    OffsetBottom 49
+   }
+   "Is Visible" 0
+   Color 0.62 1 0.45 0.32
+  }
+  TextWidgetClass "{6D8EC596ED75984A}" {
+   Name "LcdStatus"
+   Slot FrameWidgetSlot "{6D45EA7B39F129B7}" {
+    Anchor 0.5 0.5 0.5 0.5
+    PositionX -72
+    OffsetLeft -72
+    PositionY -109
+    OffsetTop -109
+    SizeX 198
+    OffsetRight -126
+    SizeY 15
+    OffsetBottom 94
    }
    Color 0 0 0 1
-   Text "01: 55500"
+   Text ""
+   "Font Size" 15
+   "Min Font Size" 10
+   "Horizontal Alignment" Left
    "Vertical Alignment" Center
-   FontProperties FontProperties "{662A446A2C1E4B56}" {
+   FontProperties FontProperties "{6D38D3D9829A6522}" {
+    Font "{D3E3853DAEBA9BD6}UI/fonts/DS_DIGI.fnt"
+   }
+  }
+  TextWidgetClass "{6D58035E1529B38E}" {
+   Name "LcdStatusRight"
+   Slot FrameWidgetSlot "{6DEFFCB1EC601D41}" {
+    Anchor 0.5 0.5 0.5 0.5
+    PositionX -72
+    OffsetLeft -72
+    PositionY -109
+    OffsetTop -109
+    SizeX 198
+    OffsetRight -126
+    SizeY 15
+    OffsetBottom 94
+   }
+   Color 0 0 0 1
+   Text ""
+   "Font Size" 15
+   "Min Font Size" 10
+   "Horizontal Alignment" Right
+   "Vertical Alignment" Center
+   FontProperties FontProperties "{6DD6B6ED9BAC6855}" {
+    Font "{D3E3853DAEBA9BD6}UI/fonts/DS_DIGI.fnt"
+   }
+  }
+  TextWidgetClass "{6D5DEB9B2A6C39AF}" {
+   Name "LcdName"
+   Slot FrameWidgetSlot "{6DD15FC0D22F6564}" {
+    Anchor 0.5 0.5 0.5 0.5
+    PositionX -72
+    OffsetLeft -72
+    PositionY -94
+    OffsetTop -94
+    SizeX 198
+    OffsetRight -126
+    SizeY 16
+    OffsetBottom 78
+   }
+   Color 0 0 0 1
+   Text ""
+   "Font Size" 16
+   "Min Font Size" 11
+   "Horizontal Alignment" Left
+   "Vertical Alignment" Center
+   FontProperties FontProperties "{6D8A27853CE06AF2}" {
+    Font "{D3E3853DAEBA9BD6}UI/fonts/DS_DIGI.fnt"
+   }
+  }
+  TextWidgetClass "{6DAAA4EA5419736B}" {
+   Name "LcdMain"
+   Slot FrameWidgetSlot "{6D5D1043D66DB2FA}" {
+    Anchor 0.5 0.5 0.5 0.5
+    PositionX -72
+    OffsetLeft -72
+    PositionY -78
+    OffsetTop -78
+    SizeX 198
+    OffsetRight -126
+    SizeY 27
+    OffsetBottom 51
+   }
+   Color 0 0 0 1
+   Text ""
+   "Font Size" 29
+   "Min Font Size" 20
+   "Horizontal Alignment" Left
+   "Vertical Alignment" Center
+   FontProperties FontProperties "{6D66B4FC7866A910}" {
     Font "{D3E3853DAEBA9BD6}UI/fonts/DS_DIGI.fnt"
    }
   }
@@ -323,28 +411,6 @@ FrameWidgetClass {
     }
    }
   }
-  TextWidgetClass "{662B45AAC93B3197}" {
-   Name "RadioText"
-   Slot FrameWidgetSlot "{662A446ACCCCB08D}" {
-    Anchor 0.5 0.5 0.5 0.5
-    PositionX -71.388
-    OffsetLeft -71.388
-    PositionY -109.76
-    OffsetTop -109.76
-    SizeX 145.402
-    OffsetRight -74.014
-    SizeY 30
-    OffsetBottom 79.76
-   }
-   Color 0 0 0 1
-   Text "Frequency"
-   "Font Size" 20
-   "Min Font Size" 20
-   "Vertical Alignment" Center
-   FontProperties FontProperties "{662A446A2C1E4B56}" {
-    Font "{D3E3853DAEBA9BD6}UI/fonts/DS_DIGI.fnt"
-   }
-  }
   ButtonWidgetClass "{662CA85A3ECEACA7}" {
    Name "MenuUp"
    Slot FrameWidgetSlot "{662A44765E14B87A}" {
@@ -389,27 +455,6 @@ FrameWidgetClass {
    components {
     SCR_ButtonTextComponent "{662A44FEA39790E2}" {
     }
-   }
-  }
-  TextWidgetClass "{662D27C3EA3744B5}" {
-   Name "Line3"
-   Slot FrameWidgetSlot "{662A446ACCCCB08D}" {
-    Anchor 0.5 0.5 0.5 0.5
-    PositionX 46.993
-    OffsetLeft 46.993
-    PositionY -109.8
-    OffsetTop -109.8
-    SizeX 82.976
-    OffsetRight -129.969
-    SizeY 30
-    OffsetBottom 79.8
-   }
-   Color 0 0 0 1
-   Text "+100"
-   "Horizontal Alignment" Right
-   "Vertical Alignment" Center
-   FontProperties FontProperties "{662A446A2C1E4B56}" {
-    Font "{D3E3853DAEBA9BD6}UI/fonts/DS_DIGI.fnt"
    }
   }
   ImageWidgetClass "{6639351C68E8584E}" {
@@ -505,13 +550,19 @@ FrameWidgetClass {
       OffsetLeft 1226.47
       PositionY 642.774
       OffsetTop 642.774
-      SizeX -1820.01
-      OffsetRight 593.536
+      SizeX -1520.01
+      OffsetRight 293.536
       SizeY -1050
       OffsetBottom 407.226
      }
-     Text "Menu Up"
-     "Horizontal Alignment" Right
+     Text "Next preset"
+     "Horizontal Alignment" Left
+     FontProperties FontProperties "{6D7707825A57B7B6}" {
+      Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
+      ShadowSize 4
+      ShadowOffset 0 0
+      ShadowOpacity 0.85
+     }
     }
     TextWidgetClass "{6698B878758C900F}" {
      Name "Text1"
@@ -521,29 +572,41 @@ FrameWidgetClass {
       OffsetLeft 1179.44
       PositionY 770.962
       OffsetTop 770.962
-      SizeX -1792.83
-      OffsetRight 613.39
+      SizeX -1492.83
+      OffsetRight 313.39
       SizeY -1050
       OffsetBottom 279.039
      }
-     Text "Menu Down"
-     "Horizontal Alignment" Right
+     Text "Prev preset"
+     "Horizontal Alignment" Left
+     FontProperties FontProperties "{6D70ECCC506E5DFF}" {
+      Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
+      ShadowSize 4
+      ShadowOffset 0 0
+      ShadowOpacity 0.85
+     }
     }
     TextWidgetClass "{6698B878758C900E}" {
      Name "Text2"
      Slot FrameWidgetSlot "{6698B87B0A9C6DFD}" {
       Anchor 0 0 1 1
-      PositionX 657.291
-      OffsetLeft 657.291
+      PositionX 357.291
+      OffsetLeft 357.291
       PositionY 710.477
       OffsetTop 710.477
-      SizeX -1792.82
+      SizeX -1492.82
       OffsetRight 1135.53
       SizeY -1050
       OffsetBottom 339.525
      }
-     Text "Menu Left"
+     Text "Volume down"
      "Horizontal Alignment" Right
+     FontProperties FontProperties "{6DF34B05C6F77E8B}" {
+      Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
+      ShadowSize 4
+      ShadowOffset 0 0
+      ShadowOpacity 0.85
+     }
     }
     TextWidgetClass "{6698B878758D65BA}" {
      Name "Text3"
@@ -553,13 +616,19 @@ FrameWidgetClass {
       OffsetLeft 1148.9
       PositionY 526.344
       OffsetTop 526.344
-      SizeX -1792.82
-      OffsetRight 643.921
+      SizeX -1492.82
+      OffsetRight 343.921
       SizeY -1050
       OffsetBottom 523.658
      }
-     Text "Clear"
-     "Horizontal Alignment" Right
+     Text "Type freq / back"
+     "Horizontal Alignment" Left
+     FontProperties FontProperties "{6D3BBBE0238E6623}" {
+      Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
+      ShadowSize 4
+      ShadowOffset 0 0
+      ShadowOpacity 0.85
+     }
     }
     TextWidgetClass "{6698B878758D6644}" {
      Name "Text4"
@@ -569,29 +638,41 @@ FrameWidgetClass {
       OffsetLeft 1154.64
       PositionY 590.905
       OffsetTop 590.905
-      SizeX -1792.82
-      OffsetRight 638.179
+      SizeX -1492.82
+      OffsetRight 338.179
       SizeY -1050
       OffsetBottom 459.098
      }
-     Text "Enter"
-     "Horizontal Alignment" Right
+     Text "Store / select"
+     "Horizontal Alignment" Left
+     FontProperties FontProperties "{6D7A2F7E0E4D3E6A}" {
+      Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
+      ShadowSize 4
+      ShadowOffset 0 0
+      ShadowOpacity 0.85
+     }
     }
     TextWidgetClass "{6698B878758D6647}" {
      Name "Text5"
      Slot FrameWidgetSlot "{6698B87B0A9C6DFD}" {
       Anchor 0 0 1 1
-      PositionX 664.996
-      OffsetLeft 664.996
+      PositionX 364.996
+      OffsetLeft 364.996
       PositionY 789.496
       OffsetTop 789.496
-      SizeX -1792.83
+      SizeX -1492.84
       OffsetRight 1127.84
       SizeY -1050
       OffsetBottom 260.506
      }
-     Text "Menu Right"
+     Text "Volume up"
      "Horizontal Alignment" Right
+     FontProperties FontProperties "{6D1CB049DBE5D156}" {
+      Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
+      ShadowSize 4
+      ShadowOffset 0 0
+      ShadowOpacity 0.85
+     }
     }
     TextWidgetClass "{6698B878758DD56B}" {
      Name "Text6"
@@ -601,13 +682,164 @@ FrameWidgetClass {
       OffsetLeft 1178.27
       PositionY 169.394
       OffsetTop 169.394
-      SizeX -1792.82
-      OffsetRight 614.553
+      SizeX -1492.82
+      OffsetRight 314.553
       SizeY -1050
       OffsetBottom 880.608
      }
-     Text "Power"
-     "Horizontal Alignment" Right
+     Text "Power on / off"
+     "Horizontal Alignment" Left
+     FontProperties FontProperties "{6DFC66DB40E41B5C}" {
+      Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
+      ShadowSize 4
+      ShadowOffset 0 0
+      ShadowOpacity 0.85
+     }
+    }
+    ImageWidgetClass "{6D75B40D0166957D}" {
+     Name "HelpLegendBg"
+     Slot FrameWidgetSlot "{6D0DB55EB794D604}" {
+      Anchor 0.5 0.5 0.5 0.5
+      PositionX -914
+      OffsetLeft -914
+      PositionY -150
+      OffsetTop -150
+      SizeX 660
+      OffsetRight 254
+      SizeY 190
+      OffsetBottom -40
+     }
+     Color 0 0 0 0.62
+    }
+    TextWidgetClass "{6D8FD7F318A11F7D}" {
+     Name "HelpLegend0"
+     Slot FrameWidgetSlot "{6DBB979DCAE0C5AF}" {
+      Anchor 0.5 0.5 0.5 0.5
+      PositionX -900
+      OffsetLeft -900
+      PositionY -140
+      OffsetTop -140
+      SizeX 640
+      OffsetRight 260
+      SizeY 32
+      OffsetBottom 108
+     }
+     Color 1 1 1 1
+     Text "7 OPT  options: volume, ears, monitor, light, clock"
+     "Font Size" 26
+     "Min Font Size" 18
+     "Horizontal Alignment" Left
+     "Vertical Alignment" Center
+     FontProperties FontProperties "{6DC5EB1284E3E012}" {
+      Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
+      ShadowSize 4
+      ShadowOffset 0 0
+      ShadowOpacity 0.8
+     }
+    }
+    TextWidgetClass "{6D9DA36587A160F1}" {
+     Name "HelpLegend1"
+     Slot FrameWidgetSlot "{6D36ACD0D831356B}" {
+      Anchor 0.5 0.5 0.5 0.5
+      PositionX -900
+      OffsetLeft -900
+      PositionY -106
+      OffsetTop -106
+      SizeX 640
+      OffsetRight 260
+      SizeY 32
+      OffsetBottom 74
+     }
+     Color 1 1 1 1
+     Text "8 PGM  type a new frequency"
+     "Font Size" 26
+     "Min Font Size" 18
+     "Horizontal Alignment" Left
+     "Vertical Alignment" Center
+     FontProperties FontProperties "{6D9AE65A95EF6043}" {
+      Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
+      ShadowSize 4
+      ShadowOffset 0 0
+      ShadowOpacity 0.8
+     }
+    }
+    TextWidgetClass "{6DA4455C11B584FF}" {
+     Name "HelpLegend2"
+     Slot FrameWidgetSlot "{6D20D3F7AA88F5A5}" {
+      Anchor 0.5 0.5 0.5 0.5
+      PositionX -900
+      OffsetLeft -900
+      PositionY -72
+      OffsetTop -72
+      SizeX 640
+      OffsetRight 260
+      SizeY 32
+      OffsetBottom 40
+     }
+     Color 1 1 1 1
+     Text "2 LT  backlight"
+     "Font Size" 26
+     "Min Font Size" 18
+     "Horizontal Alignment" Left
+     "Vertical Alignment" Center
+     FontProperties FontProperties "{6D132359B594DED2}" {
+      Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
+      ShadowSize 4
+      ShadowOffset 0 0
+      ShadowOpacity 0.8
+     }
+    }
+    TextWidgetClass "{6D15E2D6CDCDE09F}" {
+     Name "HelpLegend3"
+     Slot FrameWidgetSlot "{6D0B7E9F824F1511}" {
+      Anchor 0.5 0.5 0.5 0.5
+      PositionX -900
+      OffsetLeft -900
+      PositionY -38
+      OffsetTop -38
+      SizeX 640
+      OffsetRight 260
+      SizeY 32
+      OffsetBottom 6
+     }
+     Color 1 1 1 1
+     Text "6 and 9  up and down inside menus"
+     "Font Size" 26
+     "Min Font Size" 18
+     "Horizontal Alignment" Left
+     "Vertical Alignment" Center
+     FontProperties FontProperties "{6D88B1B8C2BE28F1}" {
+      Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
+      ShadowSize 4
+      ShadowOffset 0 0
+      ShadowOpacity 0.8
+     }
+    }
+    TextWidgetClass "{6D4C4B436FB1D476}" {
+     Name "HelpLegend4"
+     Slot FrameWidgetSlot "{6D197565C649099E}" {
+      Anchor 0.5 0.5 0.5 0.5
+      PositionX -900
+      OffsetLeft -900
+      PositionY -4
+      OffsetTop -4
+      SizeX 640
+      OffsetRight 260
+      SizeY 32
+      OffsetBottom -28
+     }
+     Color 1 1 1 1
+     Text "Number pad  type a frequency"
+     "Font Size" 26
+     "Min Font Size" 18
+     "Horizontal Alignment" Left
+     "Vertical Alignment" Center
+     FontProperties FontProperties "{6D68BE14DBAF9CED}" {
+      Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
+      ShadowSize 4
+      ShadowOffset 0 0
+      ShadowOpacity 0.8
+     }
     }
    }
   }

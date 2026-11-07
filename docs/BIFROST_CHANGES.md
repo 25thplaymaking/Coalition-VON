@@ -50,6 +50,46 @@ license: [NOTICE.md](../NOTICE.md), [LICENSE.md](../LICENSE.md).
 - **Handheld radio on speaker.** "Toggle Radio Speaker" (Left Ctrl + End) also works on your active
   handheld radio when you have no vehicle radio or manpack, so people nearby hear the net.
 
+### Radio keypads and displays work like the real radios
+
+Each radio keeps its own picture; its keys and screen were rebuilt (`CVON_RadioMenu.c` and the five
+`UI/layouts/Radios/*` layouts).
+
+- **Display.** Up to four lines inside the radio's own screen: preset number and CT/PT (crypto or plain
+  text) with the volume, the net name, the frequency in MHz (`31.120`), and the ear or monitored channel.
+  The PRC-152 and R-168 screens are too small for the fourth line, so messages use the name line there.
+  Messages: VOLUME n, STORED, SAVED, INVALID FREQ, NOT AVAILABLE. A pressed key darkens for a moment.
+- **Harris keypads (AN/PRC-152, -117, -150), per their key labels:** PRE + / - step presets (past the
+  last one makes a new one, as before). VOL + / - set the volume. 7 OPT opens the options; 8 PGM types a
+  new frequency for the preset; 2 LT switches the backlight. 6 and 9 (the arrow icons) and the left and
+  right arrows move inside menus. In the options, ENT edits an entry and ENT again saves it; CLR backs
+  out without saving. 1 CALL, 3 MODE, 4 SQL and 5 ZERO show NOT AVAILABLE (nothing to drive in VON).
+  The PRC-152 picture has no volume keys, so its left and right arrows set the volume on the home screen.
+- **R-168 and R-187:** + / - (the up and down arrows on the R-187) step channels; the bottom-row keys
+  (R-168) and top soft keys (R-187) open the options; the red / green keys clear and store; digits type a
+  frequency; the R-168 volume knob (left half down, right half up) and the R-187 side keys set volume.
+- **Options (OPT):** volume, ear, monitor channel, monitor ear, backlight, clock offset (shown as the
+  radio's time, HH:MM).
+- **Keyboard:** the number pad types a frequency straight away; Backspace works like CLR.
+- **Help overlay:** labels now name the new functions, with a short legend for the function keys.
+- **Host fix:** on the machine hosting a game, the power knob used to flip twice and do nothing; it now
+  switches once.
+- **Sources.** PRE +/- presets, CLR backing out without saving, ENT saving, 7 OPT and 8 PGM come from
+  public PRC-152 guides (ACRE2 and RHS documentation, used for behaviour only). VOL, LT, SQL, CALL,
+  MODE and ZERO are read off the key labels drawn on the radios. No manual for the R-168 or R-187 keypads
+  was found, so their keys keep the original Coalition mapping.
+- **Net names.** Channels show the net's name from the frequency config: a group's new `m_sNetName`
+  ("1 PLT NET") or, if empty, its first group name (long-range nets get "LR").
+
+### New radio pop-up
+
+- **New radio pop-up.** Replaces the small box clipped at the left edge: radio name, a coloured state
+  (TRANSMITTING amber, RECEIVING green), channel, frequency and net name, the caller's name, and the ear
+  and monitor. Layout: `UI/layouts/HUD/VON/BVON_RadioPopup.layout`. The radial menu keeps its entries.
+- The pop-up and the display rework are original. TFAR and ACRE were looked at for what works (real key
+  functions, channel names on the display) but none of their files are used: TFAR is APL-SA and ACRE2 is
+  GPLv3, which can't be mixed into this APL mod.
+
 ### Mission / server settings (on `CVON_VONGameModeComponent`)
 
 | Setting | Default | Meaning |
@@ -89,6 +129,10 @@ code is used.
 - Muted off-screen game self-test (48 checks, all passed): plugin version rules, defaults, 5 kHz
   frequencies, monitor channel routing rules, ear cycling, respawn keys, settings kept through death,
   voice directivity, terrain sampling, and the incoming-call pop-up text.
+- Keypad and display rework: muted off-screen self-test, 127 checks, all passed (every PRC-152 key on
+  the home, OPT, edit and PGM screens, number pad and Backspace, power, the frequency reaching the server,
+  and the VOL keys, options and help legend on the other four radios). Screenshots of every radio's home
+  screen, help overlay and backlight, plus the PRC-152 OPT and PGM screens, checked by eye.
 - **Not tested here (needs players and TeamSpeak):** hearing the monitored net, the pop-up during a real
   call, auto key fill with real crews, handheld speaker heard by others, terrain static in a real call.
 

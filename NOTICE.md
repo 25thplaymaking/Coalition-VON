@@ -37,6 +37,8 @@ Coalition VON on a server: do not load both.
 - Voices are slightly quieter behind the talker; handheld radios can go on speaker.
 - Plugin versions 3.0.1 and newer are accepted, with a hint to update older plugins.
 - In-game hint and keybinding titles say "Bifrost VON".
+- Radio keypads and displays rebuilt to work like the real radios (presets, OPT and PGM menus,
+  backlight, volume keys, four-line display), net names on channels, and a new radio pop-up.
 
 See [docs/BIFROST_CHANGES.md](docs/BIFROST_CHANGES.md) for details and the TFAR comparison.
 

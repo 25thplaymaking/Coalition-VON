@@ -249,6 +249,56 @@ class CVON_RadioComponent: ScriptComponent
 		return m_aChannels.Get(m_iMonitorChannel - 1);
 	}
 
+	//Net name for a frequency, shown on the radio display and the HUD: the owning group's m_sNetName,
+	//else its first group name, with " LR" for a long-range net. The faction's own groups win over the
+	//preset groups. "" when the frequency config doesn't list it.
+	string GetChannelLabel(string frequency)
+	{
+		CVON_VONGameModeComponent gamemode = CVON_VONGameModeComponent.GetInstance();
+		if (frequency == "" || !gamemode)
+			return "";
+
+		array<ref CVON_GroupFrequencyContainer> containers = {};
+		string factionKey = m_sOriginalFactionKey;
+		if (factionKey == "")
+			factionKey = m_sFactionKey;
+		array<string> keys = {};
+		factionKey.Split("|", keys, true);
+		FactionManager factionManager = GetGame().GetFactionManager();
+		if (factionManager && !keys.IsEmpty())
+		{
+			SCR_Faction faction = SCR_Faction.Cast(factionManager.GetFactionByKey(keys[0]));
+			if (faction && faction.GetCallsignInfo() && faction.GetCallsignInfo().m_aGroupFrequencyOverrides)
+			{
+				foreach (CVON_GroupFrequencyContainer overrideContainer: faction.GetCallsignInfo().m_aGroupFrequencyOverrides)
+					containers.Insert(overrideContainer);
+			}
+		}
+		if (gamemode.m_FreqConfig && gamemode.m_FreqConfig.m_aPresetGroupFrequencyContainers)
+		{
+			foreach (CVON_GroupFrequencyContainer presetContainer: gamemode.m_FreqConfig.m_aPresetGroupFrequencyContainers)
+				containers.Insert(presetContainer);
+		}
+
+		foreach (CVON_GroupFrequencyContainer container: containers)
+		{
+			if (!container)
+				continue;
+			bool shortRange = container.m_aSRFrequencies && container.m_aSRFrequencies.Contains(frequency);
+			bool longRange = container.m_aLRFrequencies && container.m_aLRFrequencies.Contains(frequency);
+			if (!shortRange && !longRange)
+				continue;
+
+			string name = container.m_sNetName;
+			if (name == "" && container.m_aGroupNames && !container.m_aGroupNames.IsEmpty())
+				name = container.m_aGroupNames[0];
+			if (name != "" && longRange && container.m_sNetName == "")
+				name += " LR";
+			return name;
+		}
+		return "";
+	}
+
 	//Does this radio hear a transmission on this frequency: its main channel or the monitored one
 	bool ReceivesFrequency(string frequency)
 	{

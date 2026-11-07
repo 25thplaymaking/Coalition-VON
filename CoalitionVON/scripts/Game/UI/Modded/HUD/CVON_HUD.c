@@ -152,6 +152,122 @@ class CVON_HUD: SCR_InfoDisplay {
 		AnimateWidget.Opacity(mic, 0, 1/0.3);
 	}
 	
+	//Bifrost VON radio pop-up (BVON_RadioPopup.layout): replaces the old box at the left edge. The radial
+	//menu still uses CVONEntry.layout through UpdateCVONRadioWidget.
+	//------------------------------------------------------------------------------------------------
+	static const ResourceName POPUP_LAYOUT = "{5A0F1A15E6D7CE95}UI/layouts/HUD/VON/BVON_RadioPopup.layout";
+	protected Widget m_wPopupRoot;
+	protected Widget m_wPopup;
+
+	protected Widget GetPopup()
+	{
+		if (!m_wPopup && m_wRoot)
+		{
+			m_wPopupRoot = GetGame().GetWorkspace().CreateWidgets(POPUP_LAYOUT, m_wRoot);
+			if (m_wPopupRoot)
+			{
+				FrameSlot.SetAnchorMin(m_wPopupRoot, 0, 0);
+				FrameSlot.SetAnchorMax(m_wPopupRoot, 1, 1);
+				FrameSlot.SetOffsets(m_wPopupRoot, 0, 0, 0, 0);
+				m_wPopup = m_wPopupRoot.FindAnyWidget("BVON_RadioPopup");
+			}
+			//The old pop-up never shows again
+			Widget oldEntry = m_wRoot.FindAnyWidget("VONEntry");
+			if (oldEntry)
+				oldEntry.SetVisible(false);
+		}
+		return m_wPopup;
+	}
+
+	static Color PopupTransmit()	{ return Color.FromRGBA(229, 146, 38, 255); }
+	static Color PopupReceive()		{ return Color.FromRGBA(143, 199, 92, 255); }
+	static Color PopupNeutral()		{ return Color.FromRGBA(170, 178, 166, 255); }
+
+	protected void PopupText(string name, string text)
+	{
+		TextWidget w = TextWidget.Cast(m_wPopup.FindAnyWidget(name));
+		if (w)
+			w.SetText(text);
+	}
+
+	protected void PopupColor(string name, Color color)
+	{
+		Widget w = m_wPopup.FindAnyWidget(name);
+		if (w)
+			w.SetColor(color);
+	}
+
+	//channelIndex: 0-based channel of the radio shown; frequency "" = that channel's; ear -1 = the radio's main ear
+	void FillPopup(CVON_RadioComponent radioComp, int channelIndex, string frequency, int ear, string speakerName, string state, Color stateColor)
+	{
+		Widget popup = GetPopup();
+		if (!popup || !radioComp)
+			return;
+
+		string radioName = radioComp.m_sRadioName;
+		if (CVON_VehicleRadioComponent.Cast(radioComp))
+			radioName = "VEHICLE RADIO";
+		PopupText("PopupRadio", radioName);
+		PopupText("PopupState", state);
+		PopupColor("PopupState", stateColor);
+		PopupColor("PopupAccent", stateColor);
+
+		if (frequency == "")
+		{
+			if (channelIndex >= 0 && channelIndex < radioComp.m_aChannels.Count())
+				frequency = radioComp.m_aChannels.Get(channelIndex);
+			else
+				frequency = radioComp.m_sFrequency;
+		}
+		string channelLine = string.Format("CH %1   %2", CVON_RadioMenu.PadChannel(channelIndex + 1), frequency);
+		string label = radioComp.GetChannelLabel(frequency);
+		if (label != "")
+			channelLine += "   " + label;
+		PopupText("PopupChannel", channelLine);
+
+		CVON_EStereo shownEar = radioComp.m_eStereo;
+		if (ear >= 0)
+			shownEar = ear;
+		string ears = "EAR " + CVON_RadioMenu.StereoText(shownEar);
+		ears.ToUpper();
+		string monitorFrequency = radioComp.GetMonitorFrequency();
+		if (monitorFrequency != "" && speakerName == "")
+		{
+			string monitorEar = CVON_RadioMenu.StereoText(radioComp.m_eMonitorStereo);
+			monitorEar.ToUpper();
+			ears += string.Format("    |    MONITOR CH %1  %2", CVON_RadioMenu.PadChannel(radioComp.m_iMonitorChannel), monitorEar);
+		}
+		PopupText("PopupEars", ears);
+
+		//The caller's name line only while a call comes in; the box shrinks without it
+		bool hasSpeaker = speakerName != "";
+		PopupText("PopupSpeaker", speakerName);
+		Widget speakerWidget = m_wPopup.FindAnyWidget("PopupSpeaker");
+		if (speakerWidget)
+			speakerWidget.SetVisible(hasSpeaker);
+		Widget earsWidget = m_wPopup.FindAnyWidget("PopupEars");
+		if (earsWidget)
+		{
+			if (hasSpeaker)
+				FrameSlot.SetPosY(earsWidget, 96);
+			else
+				FrameSlot.SetPosY(earsWidget, 68);
+		}
+		float height = 98;
+		if (hasSpeaker)
+			height = 128;
+		Widget background = m_wPopup.FindAnyWidget("PopupBg");
+		if (background)
+			FrameSlot.SetSizeY(background, height);
+		Widget accent = m_wPopup.FindAnyWidget("PopupAccent");
+		if (accent)
+			FrameSlot.SetSizeY(accent, height);
+
+		AnimateWidget.StopAllAnimations(popup);
+		popup.SetOpacity(1);
+		popup.SetVisible(true);
+	}
+
 	void ShowVONChange(int input)
 	{
 		#ifdef WORKBENCH
@@ -165,17 +281,14 @@ class CVON_HUD: SCR_InfoDisplay {
 		IEntity radio = playerController.m_aRadios.Get(0);
 		if (!radio)
 			return;
-		AnimateWidget.StopAllAnimations(m_wRoot.FindAnyWidget("VONEntry"));
-		m_wRoot.FindAnyWidget("VONEntry").SetOpacity(1);
-		m_wRoot.FindAnyWidget("VONEntry").SetVisible(true);
 		CVON_RadioComponent radioComp = CVON_RadioComponent.Cast(radio.FindComponent(CVON_RadioComponent));
 		if (!radioComp)
 			return;
-		
+
 		MarkLocalPopup();
-		UpdateCVONRadioWidget(radioComp, true, m_wRoot, input);
+		FillPopup(radioComp, input, "", -1, "", "", PopupNeutral());
 	}
-	
+
 	void ShowVONActive()
 	{
 		#ifdef WORKBENCH
@@ -189,17 +302,14 @@ class CVON_HUD: SCR_InfoDisplay {
 		IEntity radio = playerController.m_aRadios.Get(0);
 		if (!radio)
 			return;
-		AnimateWidget.StopAllAnimations(m_wRoot.FindAnyWidget("VONEntry"));
-		m_wRoot.FindAnyWidget("VONEntry").SetOpacity(1);
-		m_wRoot.FindAnyWidget("VONEntry").SetVisible(true);
 		CVON_RadioComponent radioComp = CVON_RadioComponent.Cast(radio.FindComponent(CVON_RadioComponent));
 		if (!radioComp)
 			return;
-		
+
 		MarkLocalPopup();
-		UpdateCVONRadioWidget(radioComp, true, m_wRoot, radioComp.m_iCurrentChannel - 1);
+		FillPopup(radioComp, radioComp.m_iCurrentChannel - 1, "", -1, "", "ACTIVE RADIO", PopupNeutral());
 	}
-	
+
 	void ShowVON()
 	{
 		#ifdef WORKBENCH
@@ -212,34 +322,33 @@ class CVON_HUD: SCR_InfoDisplay {
 		SCR_VONController vonController = SCR_VONController.Cast(GetGame().GetPlayerController().FindComponent(SCR_VONController));
 		if (!vonController)
 			return;
-		
+
 		if (!vonController.m_CurrentVONContainer)
 			return;
-		
+
 		if (!Replication.FindItem(vonController.m_CurrentVONContainer.m_iRadioId))
 			return;
-		
+
 		IEntity radio = RplComponent.Cast(Replication.FindItem(vonController.m_CurrentVONContainer.m_iRadioId)).GetEntity();
 		if (!radio)
 			return;
-		AnimateWidget.StopAllAnimations(m_wRoot.FindAnyWidget("VONEntry"));
-		m_wRoot.FindAnyWidget("VONEntry").SetOpacity(1);
-		m_wRoot.FindAnyWidget("VONEntry").SetVisible(true);
 		CVON_RadioComponent radioComp = CVON_RadioComponent.Cast(radio.FindComponent(CVON_RadioComponent));
 		if (!radioComp)
 			return;
-		
+
 		MarkLocalPopup();
-		UpdateCVONRadioWidget(radioComp, true, m_wRoot, radioComp.m_iCurrentChannel - 1);
+		FillPopup(radioComp, radioComp.m_iCurrentChannel - 1, "", -1, "", "TRANSMITTING", PopupTransmit());
 	}
-	
+
 	void HideVON()
 	{
-		Widget vonWidget = m_wRoot.FindAnyWidget("VONEntry");
-		vonWidget.SetOpacity(1);
-		AnimateWidget.Opacity(vonWidget, 0, 1/0.3);
+		Widget popup = GetPopup();
+		if (!popup)
+			return;
+		popup.SetOpacity(1);
+		AnimateWidget.Opacity(popup, 0, 1/0.3);
 	}
-	
+
 	//Radio pop-up while a call comes in (SCR_VONController.UpdateReceivePopup)
 	//------------------------------------------------------------------------------------------------
 	protected bool m_bShowingReceive = false;
@@ -263,16 +372,7 @@ class CVON_HUD: SCR_InfoDisplay {
 		if (GetGame().GetWorld() && GetGame().GetWorld().GetWorldTime() - m_fLocalPopupTime < RECEIVE_YIELD_MS)
 			return;
 
-		Widget entry = m_wRoot.FindAnyWidget("VONEntry");
-		if (!entry)
-			return;
-		AnimateWidget.StopAllAnimations(entry);
-		entry.SetOpacity(1);
-		entry.SetVisible(true);
-		UpdateCVONRadioWidget(radioComp, true, m_wRoot, channelNumber - 1, ear, speakerName);
-		TextWidget frequencyText = TextWidget.Cast(m_wRoot.FindAnyWidget("Frequency"));
-		if (frequencyText)
-			frequencyText.SetText(frequency);
+		FillPopup(radioComp, channelNumber - 1, frequency, ear, speakerName, "RECEIVING", PopupReceive());
 		m_bShowingReceive = true;
 	}
 
@@ -288,6 +388,11 @@ class CVON_HUD: SCR_InfoDisplay {
 	bool IsShowingReceive()
 	{
 		return m_bShowingReceive;
+	}
+
+	Widget GetPopupWidget()
+	{
+		return GetPopup();
 	}
 
 	static void UpdateCVONRadioWidget(CVON_RadioComponent radioComp, bool showWindow, Widget root, int input, int earOverride = -1, string speakerName = "")

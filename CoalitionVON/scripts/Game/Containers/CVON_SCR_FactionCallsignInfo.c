@@ -4,6 +4,10 @@ class CVON_GroupFrequencyContainer
 	[Attribute()] ref array<string> m_aGroupNames;
 	[Attribute()] ref array<string> m_aSRFrequencies;
 	[Attribute()] ref array<string> m_aLRFrequencies;
+
+	//Bifrost VON: what radios call this group's nets ("1 PLT NET"); empty uses the first group name
+	[Attribute("", desc: "Name radios show for this group's frequencies, e.g. 1 PLT NET. Empty: the first group name.")]
+	string m_sNetName;
 }
 
 [BaseContainerProps()]

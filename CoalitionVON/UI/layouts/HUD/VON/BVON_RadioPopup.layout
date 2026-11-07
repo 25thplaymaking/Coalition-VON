@@ -1,0 +1,172 @@
+FrameWidgetClass {
+ Name "rootFrame"
+ {
+  FrameWidgetClass "{6C8E6F69A1C49668}" {
+   Name "BVON_RadioPopup"
+   Slot FrameWidgetSlot "{6C719B587E78CECA}" {
+    Anchor 0 0.5 0 0.5
+    PositionX 28
+    OffsetLeft 28
+    PositionY -210
+    OffsetTop -210
+    SizeX 400
+    OffsetRight -428
+    SizeY 128
+    OffsetBottom 82
+   }
+   "Is Visible" 0
+   {
+    ImageWidgetClass "{6C8BDDC9111F09AA}" {
+     Name "PopupBg"
+     Slot FrameWidgetSlot "{6C75A1E1AD27D70E}" {
+      Anchor 0 0 0 0
+      PositionX 0
+      OffsetLeft 0
+      PositionY 0
+      OffsetTop 0
+      SizeX 400
+      OffsetRight -400
+      SizeY 128
+      OffsetBottom -128
+     }
+     Color 0.035 0.04 0.035 0.86
+    }
+    ImageWidgetClass "{6C9BDB954D49048E}" {
+     Name "PopupAccent"
+     Slot FrameWidgetSlot "{6C409C6F971F8040}" {
+      Anchor 0 0 0 0
+      PositionX 0
+      OffsetLeft 0
+      PositionY 0
+      OffsetTop 0
+      SizeX 6
+      OffsetRight -6
+      SizeY 128
+      OffsetBottom -128
+     }
+     Color 0.56 0.78 0.36 1
+    }
+    TextWidgetClass "{6C4AE9B5AF2312A6}" {
+     Name "PopupRadio"
+     Slot FrameWidgetSlot "{6C874EF6CCEF2ABD}" {
+      Anchor 0 0 0 0
+      PositionX 20
+      OffsetLeft 20
+      PositionY 8
+      OffsetTop 8
+      SizeX 250
+      OffsetRight -270
+      SizeY 30
+      OffsetBottom -38
+     }
+     Color 0.95 0.96 0.93 1
+     Text "AN/PRC-152"
+     "Font Size" 24
+     "Min Font Size" 18
+     "Horizontal Alignment" Left
+     "Vertical Alignment" Center
+     FontProperties FontProperties "{6C1EF3F32D0E2AEA}" {
+      Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
+      ShadowSize 2
+     }
+    }
+    TextWidgetClass "{6CB951D8D9F8A75D}" {
+     Name "PopupState"
+     Slot FrameWidgetSlot "{6C4E10B3AED4C53B}" {
+      Anchor 0 0 0 0
+      PositionX 260
+      OffsetLeft 260
+      PositionY 10
+      OffsetTop 10
+      SizeX 124
+      OffsetRight -384
+      SizeY 26
+      OffsetBottom -36
+     }
+     Color 0.56 0.78 0.36 1
+     Text "RECEIVING"
+     "Font Size" 16
+     "Min Font Size" 10
+     "Horizontal Alignment" Right
+     "Vertical Alignment" Center
+     FontProperties FontProperties "{6CB0E926DF60120A}" {
+      Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
+      ShadowSize 2
+     }
+    }
+    TextWidgetClass "{6CC1D5436E1F08EB}" {
+     Name "PopupChannel"
+     Slot FrameWidgetSlot "{6CD2843536BDF6CB}" {
+      Anchor 0 0 0 0
+      PositionX 20
+      OffsetLeft 20
+      PositionY 38
+      OffsetTop 38
+      SizeX 364
+      OffsetRight -384
+      SizeY 26
+      OffsetBottom -64
+     }
+     Color 0.95 0.96 0.93 1
+     Text "CH 01  31120"
+     "Font Size" 20
+     "Min Font Size" 14
+     "Horizontal Alignment" Left
+     "Vertical Alignment" Center
+     FontProperties FontProperties "{6C0116F2A36279DA}" {
+      Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
+      ShadowSize 2
+     }
+    }
+    TextWidgetClass "{6C66AAF3A4AC9348}" {
+     Name "PopupSpeaker"
+     Slot FrameWidgetSlot "{6C98E122396FB7D9}" {
+      Anchor 0 0 0 0
+      PositionX 20
+      OffsetLeft 20
+      PositionY 64
+      OffsetTop 64
+      SizeX 364
+      OffsetRight -384
+      SizeY 28
+      OffsetBottom -92
+     }
+     Color 0.56 0.78 0.36 1
+     Text "Sgt Test"
+     "Font Size" 22
+     "Min Font Size" 16
+     "Horizontal Alignment" Left
+     "Vertical Alignment" Center
+     FontProperties FontProperties "{6CA6333A20890893}" {
+      Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
+      ShadowSize 2
+     }
+    }
+    TextWidgetClass "{6C0B857B92CB72CD}" {
+     Name "PopupEars"
+     Slot FrameWidgetSlot "{6CC3200C278524C8}" {
+      Anchor 0 0 0 0
+      PositionX 20
+      OffsetLeft 20
+      PositionY 96
+      OffsetTop 96
+      SizeX 364
+      OffsetRight -384
+      SizeY 22
+      OffsetBottom -118
+     }
+     Color 0.62 0.66 0.6 1
+     Text "EAR LEFT"
+     "Font Size" 15
+     "Min Font Size" 10
+     "Horizontal Alignment" Left
+     "Vertical Alignment" Center
+     FontProperties FontProperties "{6C3C52372F60A7FF}" {
+      Font "{3E7733BAC8C831F6}UI/Fonts/RobotoCondensed/RobotoCondensed_Regular.fnt"
+      ShadowSize 2
+     }
+    }
+   }
+  }
+ }
+}
