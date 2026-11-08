@@ -46,6 +46,8 @@ Coalition VON on a server: do not load both.
   no Lima Charlie code or files are used (its repository has no licence).
 - A join status notice (plugin, TeamSpeak, VON channel, mic and sound), with the plugin reporting that
   state, and trees, people, fences and thin props no longer muffling voices. Also ideas from Lima Charlie.
+- A smaller radio pop-up (TX / RX, ear tag, long names cut to fit), the radio models' missing metal
+  surface material added, and missing drone props removed from the test world.
 
 See [docs/BIFROST_CHANGES.md](docs/BIFROST_CHANGES.md) for details and the TFAR comparison.
 

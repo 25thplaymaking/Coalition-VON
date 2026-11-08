@@ -9,10 +9,10 @@ FrameWidgetClass {
     OffsetLeft 28
     PositionY -210
     OffsetTop -210
-    SizeX 400
-    OffsetRight -428
-    SizeY 128
-    OffsetBottom 82
+    SizeX 240
+    OffsetRight -268
+    SizeY 68
+    OffsetBottom 142
    }
    "Is Visible" 0
    {
@@ -24,12 +24,12 @@ FrameWidgetClass {
       OffsetLeft 0
       PositionY 0
       OffsetTop 0
-      SizeX 400
-      OffsetRight -400
-      SizeY 128
-      OffsetBottom -128
+      SizeX 240
+      OffsetRight -240
+      SizeY 68
+      OffsetBottom -68
      }
-     Color 0.035 0.04 0.035 0.86
+     Color 0.035 0.04 0.035 0.82
     }
     ImageWidgetClass "{6C9BDB954D49048E}" {
      Name "PopupAccent"
@@ -39,10 +39,10 @@ FrameWidgetClass {
       OffsetLeft 0
       PositionY 0
       OffsetTop 0
-      SizeX 6
-      OffsetRight -6
-      SizeY 128
-      OffsetBottom -128
+      SizeX 4
+      OffsetRight -4
+      SizeY 68
+      OffsetBottom -68
      }
      Color 0.56 0.78 0.36 1
     }
@@ -50,19 +50,19 @@ FrameWidgetClass {
      Name "PopupRadio"
      Slot FrameWidgetSlot "{6C874EF6CCEF2ABD}" {
       Anchor 0 0 0 0
-      PositionX 20
-      OffsetLeft 20
-      PositionY 8
-      OffsetTop 8
-      SizeX 250
-      OffsetRight -270
-      SizeY 30
-      OffsetBottom -38
+      PositionX 12
+      OffsetLeft 12
+      PositionY 4
+      OffsetTop 4
+      SizeX 156
+      OffsetRight -168
+      SizeY 22
+      OffsetBottom -26
      }
      Color 0.95 0.96 0.93 1
      Text "AN/PRC-152"
-     "Font Size" 24
-     "Min Font Size" 18
+     "Font Size" 17
+     "Min Font Size" 11
      "Horizontal Alignment" Left
      "Vertical Alignment" Center
      FontProperties FontProperties "{6C1EF3F32D0E2AEA}" {
@@ -74,18 +74,18 @@ FrameWidgetClass {
      Name "PopupState"
      Slot FrameWidgetSlot "{6C4E10B3AED4C53B}" {
       Anchor 0 0 0 0
-      PositionX 260
-      OffsetLeft 260
-      PositionY 10
-      OffsetTop 10
-      SizeX 124
-      OffsetRight -384
-      SizeY 26
-      OffsetBottom -36
+      PositionX 168
+      OffsetLeft 168
+      PositionY 5
+      OffsetTop 5
+      SizeX 62
+      OffsetRight -230
+      SizeY 20
+      OffsetBottom -25
      }
      Color 0.56 0.78 0.36 1
-     Text "RECEIVING"
-     "Font Size" 16
+     Text "RX"
+     "Font Size" 14
      "Min Font Size" 10
      "Horizontal Alignment" Right
      "Vertical Alignment" Center
@@ -98,46 +98,22 @@ FrameWidgetClass {
      Name "PopupChannel"
      Slot FrameWidgetSlot "{6CD2843536BDF6CB}" {
       Anchor 0 0 0 0
-      PositionX 20
-      OffsetLeft 20
-      PositionY 38
-      OffsetTop 38
-      SizeX 364
-      OffsetRight -384
-      SizeY 26
-      OffsetBottom -64
+      PositionX 12
+      OffsetLeft 12
+      PositionY 25
+      OffsetTop 25
+      SizeX 176
+      OffsetRight -188
+      SizeY 20
+      OffsetBottom -45
      }
      Color 0.95 0.96 0.93 1
      Text "CH 01  31120"
-     "Font Size" 20
-     "Min Font Size" 14
+     "Font Size" 15
+     "Min Font Size" 10
      "Horizontal Alignment" Left
      "Vertical Alignment" Center
      FontProperties FontProperties "{6C0116F2A36279DA}" {
-      Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
-      ShadowSize 2
-     }
-    }
-    TextWidgetClass "{6C66AAF3A4AC9348}" {
-     Name "PopupSpeaker"
-     Slot FrameWidgetSlot "{6C98E122396FB7D9}" {
-      Anchor 0 0 0 0
-      PositionX 20
-      OffsetLeft 20
-      PositionY 64
-      OffsetTop 64
-      SizeX 364
-      OffsetRight -384
-      SizeY 28
-      OffsetBottom -92
-     }
-     Color 0.56 0.78 0.36 1
-     Text "Sgt Test"
-     "Font Size" 22
-     "Min Font Size" 16
-     "Horizontal Alignment" Left
-     "Vertical Alignment" Center
-     FontProperties FontProperties "{6CA6333A20890893}" {
       Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
       ShadowSize 2
      }
@@ -146,23 +122,47 @@ FrameWidgetClass {
      Name "PopupEars"
      Slot FrameWidgetSlot "{6CC3200C278524C8}" {
       Anchor 0 0 0 0
-      PositionX 20
-      OffsetLeft 20
-      PositionY 96
-      OffsetTop 96
-      SizeX 364
-      OffsetRight -384
-      SizeY 22
-      OffsetBottom -118
+      PositionX 188
+      OffsetLeft 188
+      PositionY 25
+      OffsetTop 25
+      SizeX 42
+      OffsetRight -230
+      SizeY 20
+      OffsetBottom -45
      }
      Color 0.62 0.66 0.6 1
-     Text "EAR LEFT"
+     Text "LEFT"
+     "Font Size" 12
+     "Min Font Size" 10
+     "Horizontal Alignment" Right
+     "Vertical Alignment" Center
+     FontProperties FontProperties "{6C3C52372F60A7FF}" {
+      Font "{3E7733BAC8C831F6}UI/Fonts/RobotoCondensed/RobotoCondensed_Regular.fnt"
+      ShadowSize 2
+     }
+    }
+    TextWidgetClass "{6C66AAF3A4AC9348}" {
+     Name "PopupSpeaker"
+     Slot FrameWidgetSlot "{6C98E122396FB7D9}" {
+      Anchor 0 0 0 0
+      PositionX 12
+      OffsetLeft 12
+      PositionY 45
+      OffsetTop 45
+      SizeX 218
+      OffsetRight -230
+      SizeY 20
+      OffsetBottom -65
+     }
+     Color 0.56 0.78 0.36 1
+     Text "Sgt Test"
      "Font Size" 15
      "Min Font Size" 10
      "Horizontal Alignment" Left
      "Vertical Alignment" Center
-     FontProperties FontProperties "{6C3C52372F60A7FF}" {
-      Font "{3E7733BAC8C831F6}UI/Fonts/RobotoCondensed/RobotoCondensed_Regular.fnt"
+     FontProperties FontProperties "{6CA6333A20890893}" {
+      Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
       ShadowSize 2
      }
     }

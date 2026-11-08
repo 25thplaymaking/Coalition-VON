@@ -190,6 +190,17 @@ class CVON_HUD: SCR_InfoDisplay {
 			w.SetText(text);
 	}
 
+	//Longest net and caller names the compact pop-up shows before cutting them short
+	static const int POPUP_NET_CHARS = 12;
+	static const int POPUP_NAME_CHARS = 24;
+
+	static string PopupTrim(string text, int maxChars)
+	{
+		if (text.Length() <= maxChars)
+			return text;
+		return text.Substring(0, maxChars - 2) + "..";
+	}
+
 	protected void PopupColor(string name, Color color)
 	{
 		Widget w = m_wPopup.FindAnyWidget(name);
@@ -219,43 +230,30 @@ class CVON_HUD: SCR_InfoDisplay {
 			else
 				frequency = radioComp.m_sFrequency;
 		}
-		string channelLine = string.Format("CH %1   %2", CVON_RadioMenu.PadChannel(channelIndex + 1), frequency);
+		//Compact card: channel, frequency and a short net name, the ear on the right. Monitor details stay on the
+		//radio itself.
+		string channelLine = string.Format("CH %1  %2", CVON_RadioMenu.PadChannel(channelIndex + 1), frequency);
 		string label = radioComp.GetChannelLabel(frequency);
 		if (label != "")
-			channelLine += "   " + label;
+			channelLine += "  " + PopupTrim(label, POPUP_NET_CHARS);
 		PopupText("PopupChannel", channelLine);
 
 		CVON_EStereo shownEar = radioComp.m_eStereo;
 		if (ear >= 0)
 			shownEar = ear;
-		string ears = "EAR " + CVON_RadioMenu.StereoText(shownEar);
+		string ears = CVON_RadioMenu.StereoText(shownEar);
 		ears.ToUpper();
-		string monitorFrequency = radioComp.GetMonitorFrequency();
-		if (monitorFrequency != "" && speakerName == "")
-		{
-			string monitorEar = CVON_RadioMenu.StereoText(radioComp.m_eMonitorStereo);
-			monitorEar.ToUpper();
-			ears += string.Format("    |    MONITOR CH %1  %2", CVON_RadioMenu.PadChannel(radioComp.m_iMonitorChannel), monitorEar);
-		}
 		PopupText("PopupEars", ears);
 
 		//The caller's name line only while a call comes in; the box shrinks without it
 		bool hasSpeaker = speakerName != "";
-		PopupText("PopupSpeaker", speakerName);
+		PopupText("PopupSpeaker", PopupTrim(speakerName, POPUP_NAME_CHARS));
 		Widget speakerWidget = m_wPopup.FindAnyWidget("PopupSpeaker");
 		if (speakerWidget)
 			speakerWidget.SetVisible(hasSpeaker);
-		Widget earsWidget = m_wPopup.FindAnyWidget("PopupEars");
-		if (earsWidget)
-		{
-			if (hasSpeaker)
-				FrameSlot.SetPosY(earsWidget, 96);
-			else
-				FrameSlot.SetPosY(earsWidget, 68);
-		}
-		float height = 98;
+		float height = 48;
 		if (hasSpeaker)
-			height = 128;
+			height = 68;
 		Widget background = m_wPopup.FindAnyWidget("PopupBg");
 		if (background)
 			FrameSlot.SetSizeY(background, height);
@@ -307,7 +305,7 @@ class CVON_HUD: SCR_InfoDisplay {
 			return;
 
 		MarkLocalPopup();
-		FillPopup(radioComp, radioComp.m_iCurrentChannel - 1, "", -1, "", "ACTIVE RADIO", PopupNeutral());
+		FillPopup(radioComp, radioComp.m_iCurrentChannel - 1, "", -1, "", "ACTIVE", PopupNeutral());
 	}
 
 	void ShowVON()
@@ -337,7 +335,7 @@ class CVON_HUD: SCR_InfoDisplay {
 			return;
 
 		MarkLocalPopup();
-		FillPopup(radioComp, radioComp.m_iCurrentChannel - 1, "", -1, "", "TRANSMITTING", PopupTransmit());
+		FillPopup(radioComp, radioComp.m_iCurrentChannel - 1, "", -1, "", "TX", PopupTransmit());
 	}
 
 	void HideVON()
@@ -372,7 +370,7 @@ class CVON_HUD: SCR_InfoDisplay {
 		if (GetGame().GetWorld() && GetGame().GetWorld().GetWorldTime() - m_fLocalPopupTime < RECEIVE_YIELD_MS)
 			return;
 
-		FillPopup(radioComp, channelNumber - 1, frequency, ear, speakerName, "RECEIVING", PopupReceive());
+		FillPopup(radioComp, channelNumber - 1, frequency, ear, speakerName, "RX", PopupReceive());
 		m_bShowingReceive = true;
 	}
 

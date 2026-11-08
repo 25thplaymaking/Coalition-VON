@@ -31,6 +31,8 @@ license: [NOTICE.md](../NOTICE.md), [LICENSE.md](../LICENSE.md).
 | Ears set with the ear keybinds or by wrapping in the radio menu weren't saved for respawn | Saved every time. |
 | Commo-card frequencies like 31120, 31130 refused | Radios accept 5 kHz steps (were 25 kHz). Per radio prefab: `m_iMinFrequency`, `m_iMaxFrequency`, `m_iFrequencyStep`. |
 | Plugin version had to match exactly | Any plugin from 3.0.1 works; players on an older plugin get a one-time hint to install the Bifrost plugin. |
+| Every game start logged "Wrong GUID/name" for the five radio models' metal surface | The models were imported with a surface material (`material/metal.gamemat`) that never shipped, so dropped radios had no metal hit sounds or effects. The mod now carries that file, under the same ID, inheriting the game's own metal. |
+| Upstream's test world `VONTestBasic` logged errors for drone goggles, a drone and its controller | They came from another mod this one doesn't load; removed from the test layer. |
 
 ## New features
 
@@ -95,8 +97,13 @@ Each radio keeps its own picture; its keys and screen were rebuilt (`CVON_RadioM
 ### New radio pop-up
 
 - **New radio pop-up.** Replaces the small box clipped at the left edge: radio name, a coloured state
-  (TRANSMITTING amber, RECEIVING green), channel, frequency and net name, the caller's name, and the ear
-  and monitor. Layout: `UI/layouts/HUD/VON/BVON_RadioPopup.layout`. The radial menu keeps its entries.
+  (TX amber, RX green), channel, frequency and net name, the ear, and the caller's name while a call comes
+  in. Layout: `UI/layouts/HUD/VON/BVON_RadioPopup.layout`. The radial menu keeps its entries.
+- **Kept small (2026-11-07).** The first version was 400 x 128 px (at 1080p) with a fourth line for the
+  ear and monitored channel, and long net names ran past its edge. It is now 240 x 48 px, 240 x 68 with a
+  caller: TX / RX instead of the full words, the ear as a short tag on the channel line, the monitored
+  channel only on the radio's own display, net names cut to 12 characters and caller names to 24
+  (`CVON_HUD.PopupTrim`).
 - The pop-up and the display rework are original. TFAR and ACRE were looked at for what works (real key
   functions, channel names on the display) but none of their files are used: TFAR is APL-SA and ACRE2 is
   GPLv3, which can't be mixed into this APL mod.
@@ -200,6 +207,12 @@ code is used.
   delay, the 15 s wait for a problem, shown once; a real tree, net fence, barrel and rifleman placed in the
   world let a voice line through while a concrete wall stops it, and a small prop fixed to the wall still
   blocks). Screenshots of the notice, ready and with problems, checked by eye.
+- Release check, 2026-11-07: plugin rebuilt clean (Rebuild, no warnings), both plugin tests pass, package
+  rebuilt. Workbench 1.9.0.37 compiles every script module, `ValidateScripts` reports zero errors (the
+  only warnings in this mod are upstream's `SCR_JsonLoadContext` / `SCR_JsonSaveContext` calls, which still
+  work). Self-test now 211 checks, all passed, including the compact pop-up's size, TX / RX, the ear tag and
+  name trimming. The game log has no more resource errors from this mod. Screenshots of the compact pop-up
+  checked by eye.
 - **Not tested here (needs players and TeamSpeak):** hearing the monitored net, the pop-up during a real
   call, auto key fill with real crews, handheld speaker heard by others, terrain static in a real call.
 
