@@ -17,6 +17,88 @@ FrameWidgetClass {
    Texture "{B45F4107A543D692}UI/layouts/Radios/R168/data/R168.edds"
    Size 2560 1440
   }
+  ImageWidgetClass "{6D06B3030751AD80}" {
+   Name "ChannelShadow"
+   Slot FrameWidgetSlot "{6D53B3300F53FCD3}" {
+    Anchor 0.5 0.5 0.5 0.5
+    PositionX 431.25
+    OffsetLeft 431.25
+    PositionY 48.75
+    OffsetTop 48.75
+    SizeX 198
+    OffsetRight -629.25
+    SizeY 198
+    OffsetBottom -246.75
+   }
+   Texture "{F0681274B159786D}UI/layouts/Radios/R168/data/R168ChannelShadow.edds"
+   Size 264 264
+  }
+  ImageWidgetClass "{6DD966E314FA2275}" {
+   Name "ChannelKnob"
+   Slot FrameWidgetSlot "{6D05E0DA52851080}" {
+    Anchor 0.5 0.5 0.5 0.5
+    PositionX 426.75
+    OffsetLeft 426.75
+    PositionY 38.25
+    OffsetTop 38.25
+    SizeX 198
+    OffsetRight -624.75
+    SizeY 198
+    OffsetBottom -236.25
+   }
+   Texture "{8A402413CB1B6BC1}UI/layouts/Radios/R168/data/R168Channel.edds"
+   Size 264 264
+  }
+  ImageWidgetClass "{6DD8B9D92332EF16}" {
+   Name "VolumeIndex"
+   Slot FrameWidgetSlot "{6D6B2C3494546663}" {
+    Anchor 0.5 0.5 0.5 0.5
+    PositionX 663
+    OffsetLeft 663
+    PositionY 152.25
+    OffsetTop 152.25
+    SizeX 84
+    OffsetRight -747
+    SizeY 84
+    OffsetBottom -236.25
+   }
+   Texture "{0BFE4BA3D3CA39DA}UI/layouts/Radios/R168/data/R168VolumeIndex.edds"
+   Size 112 112
+  }
+  ImageWidgetClass "{6D405CCA5D897F8D}" {
+   Name "ModeLight"
+   Slot FrameWidgetSlot "{6D98516AAACDC11F}" {
+    Anchor 0.5 0.5 0.5 0.5
+    PositionX -139.5
+    OffsetLeft -139.5
+    PositionY 62.25
+    OffsetTop 62.25
+    SizeX 60
+    OffsetRight 79.5
+    SizeY 51
+    OffsetBottom -113.25
+   }
+   "Is Visible" 0
+   Texture "{BF433C4608425926}UI/layouts/Radios/R168/data/R168KeyLight.edds"
+   Size 80 68
+  }
+  ImageWidgetClass "{6DEC3645A4B7B3C9}" {
+   Name "MaskLight"
+   Slot FrameWidgetSlot "{6D9087119E3B9707}" {
+    Anchor 0.5 0.5 0.5 0.5
+    PositionX -142.5
+    OffsetLeft -142.5
+    PositionY 278.25
+    OffsetTop 278.25
+    SizeX 60
+    OffsetRight 82.5
+    SizeY 51
+    OffsetBottom -329.25
+   }
+   "Is Visible" 0
+   Texture "{BF433C4608425926}UI/layouts/Radios/R168/data/R168KeyLight.edds"
+   Size 80 68
+  }
   ImageWidgetClass "{6D73141D12EB9E88}" {
    Name "LcdGlow"
    Slot FrameWidgetSlot "{6D7BBF5BBEAC7E81}" {
@@ -646,6 +728,75 @@ FrameWidgetClass {
    Texture "{BA07FE76D57B8991}UI/layouts/Radios/R168/data/R168DialOn.edds"
    Size 1 1
   }
+  ButtonWidgetClass "{6DD656D246445171}" {
+   Name "ChannelDown"
+   Slot FrameWidgetSlot "{6D6DAE7CF46AF3BE}" {
+    Anchor 0.5 0.5 0.5 0.5
+    PositionX 479.25
+    OffsetLeft 479.25
+    PositionY 90.75
+    OffsetTop 90.75
+    SizeX 46.5
+    OffsetRight -525.75
+    SizeY 93
+    OffsetBottom -183.75
+   }
+   "Z Order" 1
+   Tooltip TextWidgetTooltip "{6D198BED2A7D65B6}" {
+    Text "Channel knob: turn left"
+   }
+   Color 1 1 1 0
+   components {
+    SCR_ButtonTextComponent "{6D608D1A74DABA0B}" {
+    }
+   }
+  }
+  ButtonWidgetClass "{6D223E737938FD48}" {
+   Name "ChannelUp"
+   Slot FrameWidgetSlot "{6D4C2179F1323949}" {
+    Anchor 0.5 0.5 0.5 0.5
+    PositionX 525.75
+    OffsetLeft 525.75
+    PositionY 90.75
+    OffsetTop 90.75
+    SizeX 46.5
+    OffsetRight -572.25
+    SizeY 93
+    OffsetBottom -183.75
+   }
+   "Z Order" 1
+   Tooltip TextWidgetTooltip "{6D2432E5C19873B0}" {
+    Text "Channel knob: turn right"
+   }
+   Color 1 1 1 0
+   components {
+    SCR_ButtonTextComponent "{6DD973CA3978289D}" {
+    }
+   }
+  }
+  ButtonWidgetClass "{6D368A01AB86B4F5}" {
+   Name "ModeKey"
+   Slot FrameWidgetSlot "{6D689DABB08191BE}" {
+    Anchor 0.5 0.5 0.5 0.5
+    PositionX -139.5
+    OffsetLeft -139.5
+    PositionY 63
+    OffsetTop 63
+    SizeX 60
+    OffsetRight 79.5
+    SizeY 49.5
+    OffsetBottom -112.5
+   }
+   "Z Order" 1
+   Tooltip TextWidgetTooltip "{6DAD5F21F8368A7A}" {
+    Text "Mode (options)"
+   }
+   Color 1 1 1 0
+   components {
+    SCR_ButtonTextComponent "{6DB1E2E7136CBFE0}" {
+    }
+   }
+  }
   PanelWidgetClass "{6698B836A0046CE8}" {
    Name "Panel0"
    Slot FrameWidgetSlot "{6694ADF1AE3F49D1}" {
@@ -691,7 +842,7 @@ FrameWidgetClass {
      }
      Text "Next channel"
      "Horizontal Alignment" Right
-     FontProperties FontProperties "{6DBB430F79ACA9A9}" {
+     FontProperties FontProperties "{6D40391C975869E7}" {
       Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
       ShadowSize 4
       ShadowOffset 0 0
@@ -727,7 +878,7 @@ FrameWidgetClass {
      }
      Text "Prev channel"
      "Horizontal Alignment" Right
-     FontProperties FontProperties "{6DF46FBCAC93C01C}" {
+     FontProperties FontProperties "{6D3C21B3275CC8AE}" {
       Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
       ShadowSize 4
       ShadowOffset 0 0
@@ -749,7 +900,7 @@ FrameWidgetClass {
      }
      Text "Options"
      "Horizontal Alignment" Right
-     FontProperties FontProperties "{6DED3BE0410AD224}" {
+     FontProperties FontProperties "{6D39469A8135A6EB}" {
       Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
       ShadowSize 4
       ShadowOffset 0 0
@@ -771,7 +922,7 @@ FrameWidgetClass {
      }
      Text "Clear / back"
      "Horizontal Alignment" Center
-     FontProperties FontProperties "{6D8E3287C88B9774}" {
+     FontProperties FontProperties "{6D7BD3A2FC92DE33}" {
       Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
       ShadowSize 4
       ShadowOffset 0 0
@@ -793,7 +944,7 @@ FrameWidgetClass {
      }
      Text "Store"
      "Horizontal Alignment" Center
-     FontProperties FontProperties "{6DDA2949F4A7DE56}" {
+     FontProperties FontProperties "{6D0E105A2DD7957D}" {
       Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
       ShadowSize 4
       ShadowOffset 0 0
@@ -815,7 +966,7 @@ FrameWidgetClass {
      }
      Text "Options"
      "Horizontal Alignment" Left
-     FontProperties FontProperties "{6D66A9093620182A}" {
+     FontProperties FontProperties "{6D32D4C76652FF8B}" {
       Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
       ShadowSize 4
       ShadowOffset 0 0
@@ -837,7 +988,7 @@ FrameWidgetClass {
      }
      Text "Power on / off"
      "Horizontal Alignment" Right
-     FontProperties FontProperties "{6D858498514FEB18}" {
+     FontProperties FontProperties "{6D61D9ED404DCA52}" {
       Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
       ShadowSize 4
       ShadowOffset 0 0
@@ -854,8 +1005,8 @@ FrameWidgetClass {
       OffsetTop -515
       SizeX 660
       OffsetRight 254
-      SizeY 190
-      OffsetBottom 325
+      SizeY 224
+      OffsetBottom 291
      }
      Color 0 0 0 0.62
     }
@@ -899,7 +1050,7 @@ FrameWidgetClass {
       OffsetBottom 439
      }
      Color 1 1 1 1
-     Text "Digits  type a frequency, T stores it"
+     Text "КАНАЛ knob  click a half to change channel 1-7"
      "Font Size" 26
      "Min Font Size" 18
      "Horizontal Alignment" Left
@@ -925,7 +1076,7 @@ FrameWidgetClass {
       OffsetBottom 405
      }
      Color 1 1 1 1
-     Text "TM / H  options: power, ears, monitor, light, clock"
+     Text "Digits  type a frequency, T stores it"
      "Font Size" 26
      "Min Font Size" 18
      "Horizontal Alignment" Left
@@ -951,7 +1102,7 @@ FrameWidgetClass {
       OffsetBottom 371
      }
      Color 1 1 1 1
-     Text "+ / -  change a value inside options"
+     Text "РЖ, TM or H  options: power, ears, monitor, light, clock (РЖ lights up)"
      "Font Size" 26
      "Min Font Size" 18
      "Horizontal Alignment" Left
@@ -977,12 +1128,38 @@ FrameWidgetClass {
       OffsetBottom 337
      }
      Color 1 1 1 1
-     Text "Number pad  type a frequency"
+     Text "+ / -  change a value inside options"
      "Font Size" 26
      "Min Font Size" 18
      "Horizontal Alignment" Left
      "Vertical Alignment" Center
      FontProperties FontProperties "{6DDD7947EF5688C1}" {
+      Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
+      ShadowSize 4
+      ShadowOffset 0 0
+      ShadowOpacity 0.8
+     }
+    }
+    TextWidgetClass "{6D741D3FF355A51F}" {
+     Name "HelpLegend5"
+     Slot FrameWidgetSlot "{6D8C715E8CB0AA96}" {
+      Anchor 0.5 0.5 0.5 0.5
+      PositionX -900
+      OffsetLeft -900
+      PositionY -335
+      OffsetTop -335
+      SizeX 640
+      OffsetRight 260
+      SizeY 32
+      OffsetBottom 303
+     }
+     Color 1 1 1 1
+     Text "Number pad  type a frequency"
+     "Font Size" 26
+     "Min Font Size" 18
+     "Horizontal Alignment" Left
+     "Vertical Alignment" Center
+     FontProperties FontProperties "{6DA996E1717C825B}" {
       Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
       ShadowSize 4
       ShadowOffset 0 0

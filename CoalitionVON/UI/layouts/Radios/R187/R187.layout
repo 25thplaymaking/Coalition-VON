@@ -1,22 +1,6 @@
 FrameWidgetClass {
  Name "rootFrame"
  {
-  ImageWidgetClass "{663ED4DFCB40C8EB}" {
-   Name "Knob"
-   Slot FrameWidgetSlot "{663ED4DF2DC568A0}" {
-    Anchor 0.5 0.5 0.5 0.5
-    PositionX -960
-    OffsetLeft -960
-    PositionY -540
-    OffsetTop -540
-    SizeX 1920
-    OffsetRight -960
-    SizeY 1080
-    OffsetBottom -540
-   }
-   Texture "{B13AF59E40FD3E34}UI/layouts/Radios/R187/data/R187On.edds"
-   Size 2560 1440
-  }
   ImageWidgetClass "{663ED4DFCB41F2A2}" {
    Name "Image0"
    Slot FrameWidgetSlot "{662A447270D1FD33}" {
@@ -646,29 +630,6 @@ FrameWidgetClass {
     }
    }
   }
-  ButtonWidgetClass "{663ED4DFCB40C8EA}" {
-   Name "Power"
-   Slot FrameWidgetSlot "{662A44765E14B87A}" {
-    Anchor 0.5 0.5 0.5 0.5
-    PositionX -130.81
-    OffsetLeft -130.81
-    PositionY 233.282
-    OffsetTop 233.282
-    SizeX 250.763
-    OffsetRight -119.953
-    SizeY 247.503
-    OffsetBottom -480.785
-   }
-   "Z Order" 1
-   Tooltip TextWidgetTooltip "{6639351BAFECDB1F}" {
-    Text "Power"
-   }
-   Color 1 1 1 0
-   components {
-    SCR_ButtonTextComponent "{662A44FEA39790E2}" {
-    }
-   }
-  }
   PanelWidgetClass "{6698B878B08D8597}" {
    Name "Panel0"
    Slot FrameWidgetSlot "{6694ADF1AE3F49D1}" {
@@ -730,7 +691,7 @@ FrameWidgetClass {
      }
      Text "Next channel"
      "Horizontal Alignment" Left
-     FontProperties FontProperties "{6D69CC03BAA1FCBF}" {
+     FontProperties FontProperties "{6D4C228E1582AC6B}" {
       Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
       ShadowSize 4
       ShadowOffset 0 0
@@ -752,7 +713,7 @@ FrameWidgetClass {
      }
      Text "Prev channel"
      "Horizontal Alignment" Right
-     FontProperties FontProperties "{6D2F1E71B4A3741C}" {
+     FontProperties FontProperties "{6D3F149C811623F4}" {
       Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
       ShadowSize 4
       ShadowOffset 0 0
@@ -774,7 +735,7 @@ FrameWidgetClass {
      }
      Text "Options"
      "Horizontal Alignment" Right
-     FontProperties FontProperties "{6D0492674F2D1C43}" {
+     FontProperties FontProperties "{6D3E84FDEB338A30}" {
       Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
       ShadowSize 4
       ShadowOffset 0 0
@@ -794,9 +755,9 @@ FrameWidgetClass {
       SizeY -1050
       OffsetBottom 446.592
      }
-     Text "Clear / back"
+     Text "Back (hold: power)"
      "Horizontal Alignment" Left
-     FontProperties FontProperties "{6D438663B2DA151A}" {
+     FontProperties FontProperties "{6DAD7CCDDD5EF43D}" {
       Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
       ShadowSize 4
       ShadowOffset 0 0
@@ -818,7 +779,7 @@ FrameWidgetClass {
      }
      Text "Store"
      "Horizontal Alignment" Right
-     FontProperties FontProperties "{6DB22B7CFA84420A}" {
+     FontProperties FontProperties "{6D6B95922031F390}" {
       Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
       ShadowSize 4
       ShadowOffset 0 0
@@ -840,7 +801,7 @@ FrameWidgetClass {
      }
      Text "Options"
      "Horizontal Alignment" Left
-     FontProperties FontProperties "{6D4A4DC2BB4BDCBB}" {
+     FontProperties FontProperties "{6D5A3B84BC9F971E}" {
       Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
       ShadowSize 4
       ShadowOffset 0 0
@@ -860,9 +821,9 @@ FrameWidgetClass {
       SizeY -1050
       OffsetBottom 283.423
      }
-     Text "Power on / off"
+     Text ""
      "Horizontal Alignment" Left
-     FontProperties FontProperties "{6DEC77065A15DEF9}" {
+     FontProperties FontProperties "{6D2554221A840822}" {
       Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
       ShadowSize 4
       ShadowOffset 0 0
@@ -879,8 +840,8 @@ FrameWidgetClass {
       OffsetTop -310
       SizeX 660
       OffsetRight 254
-      SizeY 190
-      OffsetBottom 120
+      SizeY 224
+      OffsetBottom 86
      }
      Color 0 0 0 0.62
     }
@@ -898,7 +859,7 @@ FrameWidgetClass {
       OffsetBottom 268
      }
      Color 1 1 1 1
-     Text "Side keys  volume"
+     Text "Red key  hold 1 s to switch on or off"
      "Font Size" 26
      "Min Font Size" 18
      "Horizontal Alignment" Left
@@ -924,7 +885,7 @@ FrameWidgetClass {
       OffsetBottom 234
      }
      Color 1 1 1 1
-     Text "Digits  type a frequency, green key stores it"
+     Text "Side keys  volume"
      "Font Size" 26
      "Min Font Size" 18
      "Horizontal Alignment" Left
@@ -950,7 +911,7 @@ FrameWidgetClass {
       OffsetBottom 200
      }
      Color 1 1 1 1
-     Text "Top soft keys  options: power, ears, monitor, light, clock"
+     Text "Digits  type a frequency, green key stores it"
      "Font Size" 26
      "Min Font Size" 18
      "Horizontal Alignment" Left
@@ -976,7 +937,7 @@ FrameWidgetClass {
       OffsetBottom 166
      }
      Color 1 1 1 1
-     Text "Up / down  change a value inside options"
+     Text "Top soft keys  options: power, ears, monitor, light, clock"
      "Font Size" 26
      "Min Font Size" 18
      "Horizontal Alignment" Left
@@ -1002,12 +963,38 @@ FrameWidgetClass {
       OffsetBottom 132
      }
      Color 1 1 1 1
-     Text "Number pad  type a frequency"
+     Text "Up / down  change a value inside options"
      "Font Size" 26
      "Min Font Size" 18
      "Horizontal Alignment" Left
      "Vertical Alignment" Center
      FontProperties FontProperties "{6D3B517F1B21AE48}" {
+      Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
+      ShadowSize 4
+      ShadowOffset 0 0
+      ShadowOpacity 0.8
+     }
+    }
+    TextWidgetClass "{6DA3AD569F8EC8CB}" {
+     Name "HelpLegend5"
+     Slot FrameWidgetSlot "{6D362106D9A7B5CC}" {
+      Anchor 0.5 0.5 0.5 0.5
+      PositionX -900
+      OffsetLeft -900
+      PositionY -130
+      OffsetTop -130
+      SizeX 640
+      OffsetRight 260
+      SizeY 32
+      OffsetBottom 98
+     }
+     Color 1 1 1 1
+     Text "Number pad  type a frequency"
+     "Font Size" 26
+     "Min Font Size" 18
+     "Horizontal Alignment" Left
+     "Vertical Alignment" Center
+     FontProperties FontProperties "{6D02738ECAFB20BF}" {
       Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
       ShadowSize 4
       ShadowOffset 0 0

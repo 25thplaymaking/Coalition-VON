@@ -57,8 +57,15 @@ class CVON_RadioMenu: MenuBase
 	static const int LAST_CHANNEL = 99;
 	static const int BAR_COUNT = 5;				//signal bars on the display
 
-	//Backlight: one setting for every radio, like leaving the light switched on
-	static bool s_bBacklight = false;
+	//Light (the display, and the keypad on the Harris radios, which light together): OFF, AUTO or ON, one setting for
+	//every radio. AUTO is the Harris "momentary" light: on with any key press, off LIGHT_AUTO_TIME after the last one.
+	static const int LIGHT_OFF = 0;
+	static const int LIGHT_AUTO = 1;
+	static const int LIGHT_ON = 2;
+	static const float LIGHT_AUTO_TIME = 10;
+	static int s_iLight = LIGHT_OFF;
+	float m_fLightTimer;
+	ImageWidget m_wKeysLit;
 
 	Widget m_wRoot;
 
@@ -77,6 +84,54 @@ class CVON_RadioMenu: MenuBase
 	TextWidget m_wInfo;
 	ImageWidget m_wGlow;
 	ImageWidget m_wKnobWidget;
+
+	//Function knob (PRC-117, PRC-150): turns to OFF, or to PT / CT to match the radio's crypto, like the real
+	//switch. The other radios swap their power picture instead (UpdateKnob).
+	ref CVON_RadioKnob m_FunctionKnob;
+	int m_iKnobOff;
+	int m_iKnobPlain;
+	int m_iKnobCipher;
+	bool m_bKnobAnimated;		//the knob picture is driven here, not swapped on / off by UpdateKnob
+	bool m_bKnobShownPower;		//power state the swapped picture shows
+
+	//AN/PRC-152 top function knob: a drum, OFF, presets 1-5, S (scan), F (front panel), Z (zeroise: pull-to-turn on
+	//the real radio, so a click never reaches it). One picture per position; turning steps through the ones in
+	//between, like the knob clicking past its detents.
+	static const int DRUM_OFF = 0;
+	static const int DRUM_SCAN = 6;
+	static const int DRUM_FRONT = 7;
+	static const int DRUM_PRESETS = 5;
+	static const float DRUM_STEP_TIME = 0.05;
+	static ref array<ResourceName> s_aDrumFrames = {
+		"{0F117ABDB255DE3D}UI/layouts/Radios/ANPRC152/data/ANPRC152Knob_OFF.edds",
+		"{3DB0A91F32090092}UI/layouts/Radios/ANPRC152/data/ANPRC152Knob_1.edds",
+		"{85085F2ED99A64EA}UI/layouts/Radios/ANPRC152/data/ANPRC152Knob_2.edds",
+		"{296D0022A71013D1}UI/layouts/Radios/ANPRC152/data/ANPRC152Knob_3.edds",
+		"{5C778A5C217CD5AF}UI/layouts/Radios/ANPRC152/data/ANPRC152Knob_4.edds",
+		"{665C94DD7ED81A96}UI/layouts/Radios/ANPRC152/data/ANPRC152Knob_5.edds",
+		"{6CC0EEA64E8DB18C}UI/layouts/Radios/ANPRC152/data/ANPRC152Knob_S.edds",
+		"{EE4C87B6AADB9B93}UI/layouts/Radios/ANPRC152/data/ANPRC152Knob_F.edds",
+		"{DCD526B23EF26E6F}UI/layouts/Radios/ANPRC152/data/ANPRC152Knob_Z.edds"
+	};
+	bool m_bDrum;
+	int m_iDrumTarget = -1;
+	int m_iDrumShown = -1;
+	float m_fDrumTimer;
+
+	//R-168: the channel lever (KANAL 1-7) and the volume knob's index turn with the radio; the mode key (RZh) has a
+	//light that shows while its menu is open
+	static const int R168_CHANNELS = 7;
+	ref CVON_RadioKnob m_ChannelKnob;
+	ref CVON_RadioKnob m_VolumeKnob;
+	Widget m_wModeLight;
+	Widget m_wMaskLight;		//TM, speech masking: lit while the radio is on crypto (CT)
+
+	//R-187: no power switch; holding the red key switches the radio on or off
+	static const float POWER_HOLD_TIME = 1.0;
+	ref CVON_HoldKeyHandler m_RedKey;
+	float m_fRedKeyHeld;
+	bool m_bRedKeyFired;
+	float m_fRedKeyBlock;		//swallows the click that ends a hold
 
 	//TX / RX marker and signal bars: lit bars use the display's ink, unlit ones a faint trace of it
 	TextWidget m_wLink;
@@ -131,7 +186,8 @@ class CVON_RadioMenu: MenuBase
 		m_InputManager.AddActionListener("VONMenu", EActionTrigger.DOWN, Close);
 
 		array<string> keys = {"Button0", "Button1", "Button2", "Button3", "Button4", "Button5", "Button6", "Button7", "Button8", "Button9",
-			"Clear", "Enter", "MenuLeft", "MenuRight", "MenuUp", "MenuDown", "VolUp", "VolDown", "Power"};
+			"Clear", "Enter", "MenuLeft", "MenuRight", "MenuUp", "MenuDown", "VolUp", "VolDown", "Power",
+			"KnobUp", "KnobDown", "ChannelUp", "ChannelDown", "ModeKey"};
 		foreach (string key: keys)
 		{
 			Widget keyWidget = m_wRoot.FindAnyWidget(key);
@@ -150,6 +206,9 @@ class CVON_RadioMenu: MenuBase
 		m_wInfo = TextWidget.Cast(m_wRoot.FindAnyWidget("LcdInfo"));
 		m_wGlow = ImageWidget.Cast(m_wRoot.FindAnyWidget("LcdGlow"));
 		m_wKnobWidget = ImageWidget.Cast(m_wRoot.FindAnyWidget("Knob"));
+		m_wKeysLit = ImageWidget.Cast(m_wRoot.FindAnyWidget("KeysLit"));
+		m_wModeLight = m_wRoot.FindAnyWidget("ModeLight");
+		m_wMaskLight = m_wRoot.FindAnyWidget("MaskLight");
 
 		m_wLink = TextWidget.Cast(m_wRoot.FindAnyWidget("LcdLink"));
 		for (int bar = 0; bar < BAR_COUNT; bar++)
@@ -218,6 +277,7 @@ class CVON_RadioMenu: MenuBase
 			if (!m_RadioComponent)
 				return;
 			m_bHarrisKeys = IsHarrisRadio(m_RadioComponent.m_eRadioMenu);
+			SetupKnobs();
 			UpdateKnob();
 		}
 
@@ -235,6 +295,10 @@ class CVON_RadioMenu: MenuBase
 				EndFlash();
 		}
 
+		if (m_fLightTimer > 0)
+			m_fLightTimer -= tDelta;
+		UpdateRedKey(tDelta);
+
 		if (m_fPendingTimer > 0)
 		{
 			m_fPendingTimer -= tDelta;
@@ -248,6 +312,7 @@ class CVON_RadioMenu: MenuBase
 			m_fBlinkTimer = 0;
 
 		RefreshDisplay();
+		SyncKnobs(tDelta);
 	}
 
 	static bool IsHarrisRadio(int menuPreset)
@@ -291,14 +356,27 @@ class CVON_RadioMenu: MenuBase
 			return;
 
 		Flash(key);
+		//The click that ends a held red key (R-187 power) does nothing else
+		if (key == "Clear" && (m_bRedKeyFired || m_fRedKeyBlock > 0))
+			return;
 		if (key == "Power")
 		{
 			TogglePower();
 			return;
 		}
+		if (key == "KnobUp" || key == "KnobDown")
+		{
+			if (key == "KnobUp")
+				TurnDrum(1);
+			else
+				TurnDrum(-1);
+			return;
+		}
 		if (!m_RadioComponent.m_bPower)
 			return;
 
+		//AUTO light: any key lights the display (and keypad) again
+		m_fLightTimer = LIGHT_AUTO_TIME;
 		AudioSystem.PlaySound(KEY_CLICK);
 		//The next key press clears a message (on small screens it covers the name line)
 		m_sMessage = "";
@@ -310,6 +388,25 @@ class CVON_RadioMenu: MenuBase
 				StepVolume(1);
 			else
 				StepVolume(-1);
+			return;
+		}
+		if (key == "ChannelUp" || key == "ChannelDown")
+		{
+			if (key == "ChannelUp")
+				TurnChannel(1);
+			else
+				TurnChannel(-1);
+			RefreshDisplay();
+			return;
+		}
+		//R-168 mode key: opens the options, and closes them again
+		if (key == "ModeKey")
+		{
+			if (m_eScreen == CVON_ERadioScreen.OPTIONS || m_eScreen == CVON_ERadioScreen.EDIT)
+				m_eScreen = CVON_ERadioScreen.HOME;
+			else
+				OpenOptions();
+			RefreshDisplay();
 			return;
 		}
 
@@ -369,11 +466,10 @@ class CVON_RadioMenu: MenuBase
 			{
 				case 2:
 				{
-					s_bBacklight = !s_bBacklight;
-					if (s_bBacklight)
-						ShowMessage("LIGHT ON");
-					else
-						ShowMessage("LIGHT OFF");
+					//LT: light off, auto (momentary), on
+					s_iLight = (s_iLight + 1) % 3;
+					m_fLightTimer = LIGHT_AUTO_TIME;
+					ShowMessage("LIGHT " + LightText(s_iLight));
 					return;
 				}
 				case 7: {OpenOptions(); return;}
@@ -522,12 +618,7 @@ class CVON_RadioMenu: MenuBase
 			case CVON_ERadioOption.EAR: {return m_RadioComponent.m_eStereo;}
 			case CVON_ERadioOption.MONITOR: {return m_RadioComponent.m_iMonitorChannel;}
 			case CVON_ERadioOption.MONITOR_EAR: {return m_RadioComponent.m_eMonitorStereo;}
-			case CVON_ERadioOption.LIGHT:
-			{
-				if (s_bBacklight)
-					return 1;
-				return 0;
-			}
+			case CVON_ERadioOption.LIGHT: {return s_iLight;}
 			case CVON_ERadioOption.CLOCK: {return m_RadioComponent.m_iTimeDeviation;}
 		}
 		return 0;
@@ -542,7 +633,7 @@ class CVON_RadioMenu: MenuBase
 			case CVON_ERadioOption.EAR: {return NextStereo(value, direction);}
 			case CVON_ERadioOption.MONITOR: {return NextMonitorChannel(value, direction);}
 			case CVON_ERadioOption.MONITOR_EAR: {return NextStereo(value, direction);}
-			case CVON_ERadioOption.LIGHT: {return 1 - value;}
+			case CVON_ERadioOption.LIGHT: {return Math.ClampInt(value + direction, LIGHT_OFF, LIGHT_ON);}
 			case CVON_ERadioOption.CLOCK: {return Math.ClampInt(value + direction, -CLOCK_LIMIT, CLOCK_LIMIT);}
 		}
 		return value;
@@ -584,7 +675,12 @@ class CVON_RadioMenu: MenuBase
 				SaveSettings();
 				return;
 			}
-			case CVON_ERadioOption.LIGHT: {s_bBacklight = value == 1; return;}
+			case CVON_ERadioOption.LIGHT:
+			{
+				s_iLight = value;
+				m_fLightTimer = LIGHT_AUTO_TIME;
+				return;
+			}
 			case CVON_ERadioOption.CLOCK:
 			{
 				m_RadioComponent.m_iTimeDeviation = value;
@@ -623,12 +719,7 @@ class CVON_RadioMenu: MenuBase
 				return "P" + PadChannel(value) + " " + FormatFrequency(m_RadioComponent.m_aChannels.Get(value - 1));
 			}
 			case CVON_ERadioOption.MONITOR_EAR: {return EarText(value);}
-			case CVON_ERadioOption.LIGHT:
-			{
-				if (value == 1)
-					return "ON";
-				return "OFF";
-			}
+			case CVON_ERadioOption.LIGHT: {return LightText(value);}
 			case CVON_ERadioOption.CLOCK: {return ClockText(value);}
 		}
 		return "";
@@ -725,12 +816,19 @@ class CVON_RadioMenu: MenuBase
 			next = 1;
 		if (next < 1)
 			next = Math.Max(channelCount, 1);
+		GoToPreset(next);
+	}
 
+	//Switch to a preset; past the last one makes a new one (as PRE+ always did)
+	void GoToPreset(int next)
+	{
+		int channelCount = m_RadioComponent.m_aChannels.Count();
 		string frequency;
 		if (next > channelCount)
 		{
 			m_RadioComponent.AddChannelClient();
 			frequency = "55500";
+			next = channelCount + 1;
 		}
 		else
 			frequency = m_RadioComponent.m_aChannels.Get(next - 1);
@@ -784,14 +882,257 @@ class CVON_RadioMenu: MenuBase
 		#endif
 		m_eScreen = CVON_ERadioScreen.HOME;
 		m_sMessage = "";
+		//Switching on lights an AUTO light, like any key
+		m_fLightTimer = LIGHT_AUTO_TIME;
 		UpdateKnob();
 		RefreshDisplay();
 		AudioSystem.PlaySound(KEY_CLICK);
 	}
 
+	//Knobs drawn as their own picture, with the pointer angle of each position read off the markings printed
+	//around them on the radio (positions in the order printed). The picture is the radio's "on" knob art.
+	void SetupKnobs()
+	{
+		switch (m_RadioComponent.m_eRadioMenu)
+		{
+			case ChimeraMenuPreset.ANPRC152:
+			{
+				if (!m_wKnobWidget)
+					break;
+				m_bDrum = true;
+				m_bKnobAnimated = true;
+				if (m_RadioComponent.m_bPower)
+					m_iDrumTarget = DrumForChannel(ShownChannel());
+				else
+					m_iDrumTarget = DRUM_OFF;
+				break;
+			}
+			case ChimeraMenuPreset.R168:
+			{
+				ImageWidget lever = ImageWidget.Cast(m_wRoot.FindAnyWidget("ChannelKnob"));
+				if (lever)
+				{
+					//KANAL 1-7: pointer angles of the dots printed beside each number
+					array<float> channels168 = {220.7, 188.5, 156.1, 117.4, 72.3, 28.3, -9.2};
+					m_ChannelKnob = new CVON_RadioKnob(lever, 0.5, 0.5, -24.5, channels168);
+					m_ChannelKnob.SetShadow(ImageWidget.Cast(m_wRoot.FindAnyWidget("ChannelShadow")), 0.5, 0.5);
+				}
+				ImageWidget index = ImageWidget.Cast(m_wRoot.FindAnyWidget("VolumeIndex"));
+				if (index)
+				{
+					//Volume 0-9: from the 0 mark clockwise round to the end mark (the dots printed beside the knob)
+					array<float> volumes168 = {};
+					for (int v = 0; v <= 9; v++)
+					{
+						volumes168.Insert(-8.3 - v * 307.1 / 9);
+					}
+					m_VolumeKnob = new CVON_RadioKnob(index, 0.5, 0.5, 0, volumes168);
+				}
+				break;
+			}
+			case ChimeraMenuPreset.R187:
+			{
+				Widget redKey = m_wRoot.FindAnyWidget("Clear");
+				if (redKey)
+				{
+					m_RedKey = new CVON_HoldKeyHandler();
+					redKey.AddHandler(m_RedKey);
+				}
+				break;
+			}
+		}
+		if (!m_wKnobWidget)
+			return;
+		switch (m_RadioComponent.m_eRadioMenu)
+		{
+			case ChimeraMenuPreset.ANPRC117:
+			{
+				//OFF, CT, PT, LD, Z
+				array<float> detents117 = {69.0, 28.5, 4.0, -25.0, -55.0};
+				m_FunctionKnob = new CVON_RadioKnob(m_wKnobWidget, 1938 / 2560.0, 502 / 1440.0, 30.2, detents117);
+				m_iKnobOff = 0;
+				m_iKnobCipher = 1;
+				m_iKnobPlain = 2;
+				break;
+			}
+			case ChimeraMenuPreset.ANPRC150:
+			{
+				//OFF, PT, CC, CT, RV, LD, Z
+				array<float> detents150 = {136.0, 89.0, 45.0, 17.0, -6.0, -38.0, -89.0};
+				m_FunctionKnob = new CVON_RadioKnob(m_wKnobWidget, 1462.5 / 2560.0, 828.5 / 1440.0, 16.6, detents150);
+				m_iKnobOff = 0;
+				m_iKnobPlain = 1;
+				m_iKnobCipher = 3;
+				break;
+			}
+		}
+		if (!m_FunctionKnob)
+			return;
+		m_bKnobAnimated = true;
+		m_wKnobWidget.LoadImageTexture(1, m_RadioComponent.m_sDialOn);
+		m_wKnobWidget.SetImage(1);
+	}
+
+	//Every frame: knobs follow the radio (power, crypto, preset, volume) and ease into place
+	void SyncKnobs(float tDelta)
+	{
+		if (m_FunctionKnob)
+		{
+			int detent = m_iKnobOff;
+			if (m_RadioComponent.m_bPower)
+			{
+				if (CryptoText() == "CT")
+					detent = m_iKnobCipher;
+				else
+					detent = m_iKnobPlain;
+			}
+			m_FunctionKnob.SetDetent(detent);
+			m_FunctionKnob.Update(tDelta);
+		}
+		if (m_bDrum)
+			SyncDrum(tDelta);
+		if (m_ChannelKnob)
+		{
+			m_ChannelKnob.SetDetent(Math.ClampInt(ShownChannel(), 1, R168_CHANNELS) - 1);
+			m_ChannelKnob.Update(tDelta);
+		}
+		if (m_VolumeKnob)
+		{
+			m_VolumeKnob.SetDetent(m_RadioComponent.m_iVolume);
+			m_VolumeKnob.Update(tDelta);
+		}
+		//Power pictures (the R-168's toggle) follow the radio however it was switched
+		if (m_RadioComponent.m_bPower != m_bKnobShownPower)
+			UpdateKnob();
+	}
+
+	//PRC-152 drum position for a preset: 1-5 on the knob, any other preset is chosen on the front panel (F)
+	static int DrumForChannel(int channel)
+	{
+		if (channel >= 1 && channel <= DRUM_PRESETS)
+			return channel;
+		return DRUM_FRONT;
+	}
+
+	//Turning the PRC-152 knob one position (click on its left or right half). OFF switches off, any other position
+	//switches on; 1-5 select that preset, S (scan) isn't available in VON, F hands presets to the keypad.
+	void TurnDrum(int direction)
+	{
+		if (!m_bDrum)
+			return;
+		int next = Math.ClampInt(m_iDrumTarget + direction, DRUM_OFF, DRUM_FRONT);
+		if (next == m_iDrumTarget)
+			return;
+		m_iDrumTarget = next;
+		bool on = m_RadioComponent.m_bPower;
+		if (next == DRUM_OFF)
+		{
+			if (on)
+				TogglePower();
+			return;
+		}
+		if (!on)
+			TogglePower();
+		else
+			AudioSystem.PlaySound(KEY_CLICK);
+		m_fLightTimer = LIGHT_AUTO_TIME;
+		if (next <= DRUM_PRESETS)
+			GoToPreset(next);
+		else if (next == DRUM_SCAN)
+			ShowMessage("SCAN N/A");
+		else
+			ShowMessage("FRONT PANEL");
+		RefreshDisplay();
+	}
+
+	void SyncDrum(float tDelta)
+	{
+		int target = m_iDrumTarget;
+		int channel = ShownChannel();
+		if (!m_RadioComponent.m_bPower)
+			target = DRUM_OFF;
+		else if (target == DRUM_OFF)
+			target = DrumForChannel(channel);
+		//On a preset position the knob is the preset: PRE keys moving to another preset turn it too
+		else if (target >= 1 && target <= DRUM_PRESETS && target != channel)
+			target = DrumForChannel(channel);
+		m_iDrumTarget = target;
+		if (m_iDrumShown == m_iDrumTarget)
+			return;
+		if (m_iDrumShown >= 0)
+		{
+			m_fDrumTimer -= tDelta;
+			if (m_fDrumTimer > 0)
+				return;
+			if (m_iDrumShown < m_iDrumTarget)
+				m_iDrumShown++;
+			else
+				m_iDrumShown--;
+		}
+		else
+			m_iDrumShown = m_iDrumTarget;
+		m_wKnobWidget.LoadImageTexture(0, s_aDrumFrames[m_iDrumShown]);
+		m_wKnobWidget.SetImage(0);
+		m_fDrumTimer = DRUM_STEP_TIME;
+	}
+
+	//R-168 channel lever: one channel either way, 1 to 7
+	void TurnChannel(int direction)
+	{
+		int next = Math.ClampInt(ShownChannel() + direction, 1, R168_CHANNELS);
+		if (next == ShownChannel())
+			return;
+		GoToPreset(next);
+	}
+
+	//R-187: the red key held for POWER_HOLD_TIME switches the radio on or off
+	void UpdateRedKey(float tDelta)
+	{
+		if (m_fRedKeyBlock > 0)
+			m_fRedKeyBlock -= tDelta;
+		if (!m_RedKey || !m_RadioComponent)
+			return;
+		if (!m_RedKey.m_bDown)
+		{
+			m_fRedKeyHeld = 0;
+			if (m_bRedKeyFired)
+			{
+				m_bRedKeyFired = false;
+				m_fRedKeyBlock = 0.3;
+			}
+			return;
+		}
+		m_fRedKeyHeld += tDelta;
+		if (m_fRedKeyHeld >= POWER_HOLD_TIME && !m_bRedKeyFired)
+		{
+			m_bRedKeyFired = true;
+			TogglePower();
+		}
+	}
+
+	static string LightText(int light)
+	{
+		switch (light)
+		{
+			case LIGHT_AUTO: {return "AUTO";}
+			case LIGHT_ON: {return "ON";}
+		}
+		return "OFF";
+	}
+
+	bool IsLit()
+	{
+		if (!m_RadioComponent || !m_RadioComponent.m_bPower)
+			return false;
+		if (s_iLight == LIGHT_ON)
+			return true;
+		return s_iLight == LIGHT_AUTO && m_fLightTimer > 0;
+	}
+
 	void UpdateKnob()
 	{
-		if (!m_wKnobWidget)
+		m_bKnobShownPower = m_RadioComponent.m_bPower;
+		if (!m_wKnobWidget || m_bKnobAnimated)
 			return;
 		if (m_RadioComponent.m_bPower)
 			m_wKnobWidget.LoadImageTexture(1, m_RadioComponent.m_sDialOn);
@@ -828,8 +1169,15 @@ class CVON_RadioMenu: MenuBase
 			return;
 
 		bool on = m_RadioComponent.m_bPower;
+		bool lit = IsLit();
 		if (m_wGlow)
-			m_wGlow.SetVisible(on && s_bBacklight);
+			m_wGlow.SetVisible(lit);
+		if (m_wKeysLit)
+			m_wKeysLit.SetVisible(lit);
+		if (m_wModeLight)
+			m_wModeLight.SetVisible(on && (m_eScreen == CVON_ERadioScreen.OPTIONS || m_eScreen == CVON_ERadioScreen.EDIT));
+		if (m_wMaskLight)
+			m_wMaskLight.SetVisible(on && CryptoText() == "CT");
 		SetLine(m_wStatus, on, "");
 		SetLine(m_wStatusRight, on, "");
 		SetLine(m_wName, on, "");

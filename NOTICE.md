@@ -48,6 +48,8 @@ Coalition VON on a server: do not load both.
   state, and trees, people, fences and thin props no longer muffling voices. Also ideas from Lima Charlie.
 - A smaller radio pop-up (TX / RX, ear tag, long names cut to fit), the radio models' missing metal
   surface material added, and missing drone props removed from the test world.
+- Radio knobs that turn to their real positions and keys and LEDs that light like the real radios. The new
+  knob and light pictures are cut from the original Coalition radio art.
 
 See [docs/BIFROST_CHANGES.md](docs/BIFROST_CHANGES.md) for details and the TFAR comparison.
 
@@ -67,6 +69,9 @@ Paste this at the end of the Workshop description on every release:
   without muffling follow behaviour its documentation
   describes. Our own code; nothing copied.
 - **TFAR** and **ACRE2**: features re-implemented from how they behave in game; no code or files used.
+- Real radio behaviour was read from the Harris AN/PRC-117G Field Reference Guide, the Harris AN/PRC-150(C)
+  Operation Manual, the L3Harris AN/PRC-152A datasheet, the Azart R-187-P1 operator memo and R-168 family
+  documents (sources in [docs/RADIO_CONTROLS.md](docs/RADIO_CONTROLS.md)). Behaviour only; nothing copied.
 
 ## Third-party code
 - cJSON, Copyright (c) 2009-2017 Dave Gamble and cJSON contributors, MIT License (text kept

@@ -17,6 +17,23 @@ FrameWidgetClass {
    Texture "{5F2DB695536EAE83}UI/layouts/Radios/ANPRC152/data/ANPRC152.edds"
    Size 1 1
   }
+  ImageWidgetClass "{6DDCA28E75552491}" {
+   Name "KeysLit"
+   Slot FrameWidgetSlot "{6D55C11753AD56C7}" {
+    Anchor 0.5 0.5 0.5 0.5
+    PositionX -960
+    OffsetLeft -960
+    PositionY -540
+    OffsetTop -540
+    SizeX 1920
+    OffsetRight -960
+    SizeY 1080
+    OffsetBottom -540
+   }
+   "Is Visible" 0
+   Texture "{B1D95022EE5B0282}UI/layouts/Radios/ANPRC152/data/ANPRC152Keys.edds"
+   Size 2560 1440
+  }
   ImageWidgetClass "{6D6D2AC8D6E33A93}" {
    Name "LcdGlow"
    Slot FrameWidgetSlot "{6DE8D5FB8D7B9A2F}" {
@@ -555,42 +572,65 @@ FrameWidgetClass {
     }
    }
   }
-  ImageWidgetClass "{6639351C68E8584E}" {
+  ImageWidgetClass "{6D3C8FEC6502B4A5}" {
    Name "Knob"
-   Slot FrameWidgetSlot "{662A447270D1FD33}" {
+   Slot FrameWidgetSlot "{6D5C6C8CBBCA0E69}" {
     Anchor 0.5 0.5 0.5 0.5
-    PositionX -960
-    OffsetLeft -960
-    PositionY -540
-    OffsetTop -540
-    SizeX 1920
-    OffsetRight -960
-    SizeY 1080
-    OffsetBottom -540
+    PositionX 4.5
+    OffsetLeft 4.5
+    PositionY -435
+    OffsetTop -435
+    SizeX 78
+    OffsetRight -82.5
+    SizeY 87
+    OffsetBottom 348
    }
-   Texture "{0470C6B83320621C}UI/layouts/Radios/ANPRC152/data/ANPRC152DialOn.edds"
-   Size 2560 1440
+   Texture "{3DB0A91F32090092}UI/layouts/Radios/ANPRC152/data/ANPRC152Knob_1.edds"
+   Size 104 116
   }
-  ButtonWidgetClass "{6639351C5B424193}" {
-   Name "Power"
-   Slot FrameWidgetSlot "{662A44765E14B87A}" {
+  ButtonWidgetClass "{6D269F303307E6ED}" {
+   Name "KnobDown"
+   Slot FrameWidgetSlot "{6D5874638CCED99E}" {
     Anchor 0.5 0.5 0.5 0.5
-    PositionX 6.44
-    OffsetLeft 6.44
-    PositionY -433.941
-    OffsetTop -433.941
-    SizeX 74.455
-    OffsetRight -80.895
-    SizeY 84.642
-    OffsetBottom 349.299
+    PositionX 4.5
+    OffsetLeft 4.5
+    PositionY -435
+    OffsetTop -435
+    SizeX 39
+    OffsetRight -43.5
+    SizeY 87
+    OffsetBottom 348
    }
    "Z Order" 1
-   Tooltip TextWidgetTooltip "{6639351BAFECDB1F}" {
-    Text "Power"
+   Tooltip TextWidgetTooltip "{6DE7435328BDE759}" {
+    Text "Turn knob left"
    }
    Color 1 1 1 0
    components {
-    SCR_ButtonTextComponent "{662A44FEA39790E2}" {
+    SCR_ButtonTextComponent "{6D645B1E4EB3DC33}" {
+    }
+   }
+  }
+  ButtonWidgetClass "{6D35FC8668162159}" {
+   Name "KnobUp"
+   Slot FrameWidgetSlot "{6D9DE1C57E32734A}" {
+    Anchor 0.5 0.5 0.5 0.5
+    PositionX 43.5
+    OffsetLeft 43.5
+    PositionY -435
+    OffsetTop -435
+    SizeX 39
+    OffsetRight -82.5
+    SizeY 87
+    OffsetBottom 348
+   }
+   "Z Order" 1
+   Tooltip TextWidgetTooltip "{6D780FB626048598}" {
+    Text "Turn knob right"
+   }
+   Color 1 1 1 0
+   components {
+    SCR_ButtonTextComponent "{6DA76EBBE47ED9A9}" {
     }
    }
   }
@@ -655,7 +695,7 @@ FrameWidgetClass {
      }
      Text "Next preset"
      "Horizontal Alignment" Left
-     FontProperties FontProperties "{6D06D6A9C21CAEA1}" {
+     FontProperties FontProperties "{6D533F80CE424CB4}" {
       Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
       ShadowSize 4
       ShadowOffset 0 0
@@ -677,7 +717,7 @@ FrameWidgetClass {
      }
      Text "Prev preset"
      "Horizontal Alignment" Left
-     FontProperties FontProperties "{6DC6F9D7E3169576}" {
+     FontProperties FontProperties "{6D3312325BB7114E}" {
       Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
       ShadowSize 4
       ShadowOffset 0 0
@@ -699,7 +739,7 @@ FrameWidgetClass {
      }
      Text "Volume down"
      "Horizontal Alignment" Right
-     FontProperties FontProperties "{6D4F84FA4AAD50D4}" {
+     FontProperties FontProperties "{6DB41CC058DA66C5}" {
       Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
       ShadowSize 4
       ShadowOffset 0 0
@@ -721,7 +761,7 @@ FrameWidgetClass {
      }
      Text "Type freq / back"
      "Horizontal Alignment" Left
-     FontProperties FontProperties "{6D09F2605F843DE9}" {
+     FontProperties FontProperties "{6DA278876DDEABBC}" {
       Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
       ShadowSize 4
       ShadowOffset 0 0
@@ -743,7 +783,7 @@ FrameWidgetClass {
      }
      Text "Store / select"
      "Horizontal Alignment" Left
-     FontProperties FontProperties "{6D58B6AE03A339CA}" {
+     FontProperties FontProperties "{6DC45234F4CA34A0}" {
       Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
       ShadowSize 4
       ShadowOffset 0 0
@@ -765,7 +805,7 @@ FrameWidgetClass {
      }
      Text "Volume up"
      "Horizontal Alignment" Right
-     FontProperties FontProperties "{6D4518D472B0757F}" {
+     FontProperties FontProperties "{6D071DEC587530EC}" {
       Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
       ShadowSize 4
       ShadowOffset 0 0
@@ -785,9 +825,9 @@ FrameWidgetClass {
       SizeY -1050
       OffsetBottom 880.608
      }
-     Text "Power on / off"
+     Text "Knob: OFF, presets 1-5, S, F"
      "Horizontal Alignment" Left
-     FontProperties FontProperties "{6DA229FE78704EB7}" {
+     FontProperties FontProperties "{6DB2F74491F1BD00}" {
       Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
       ShadowSize 4
       ShadowOffset 0 0
@@ -800,12 +840,12 @@ FrameWidgetClass {
       Anchor 0.5 0.5 0.5 0.5
       PositionX -914
       OffsetLeft -914
-      PositionY -150
-      OffsetTop -150
+      PositionY -185
+      OffsetTop -185
       SizeX 660
       OffsetRight 254
-      SizeY 190
-      OffsetBottom -40
+      SizeY 224
+      OffsetBottom -39
      }
      Color 0 0 0 0.62
     }
@@ -815,15 +855,15 @@ FrameWidgetClass {
       Anchor 0.5 0.5 0.5 0.5
       PositionX -900
       OffsetLeft -900
-      PositionY -140
-      OffsetTop -140
+      PositionY -175
+      OffsetTop -175
       SizeX 640
       OffsetRight 260
       SizeY 32
-      OffsetBottom 108
+      OffsetBottom 143
      }
      Color 1 1 1 1
-     Text "7 OPT  options: volume, power, ears, monitor, light, clock"
+     Text "Top knob  click a half to turn: OFF, presets 1-5, S scan, F front panel"
      "Font Size" 26
      "Min Font Size" 18
      "Horizontal Alignment" Left
@@ -841,15 +881,15 @@ FrameWidgetClass {
       Anchor 0.5 0.5 0.5 0.5
       PositionX -900
       OffsetLeft -900
-      PositionY -106
-      OffsetTop -106
+      PositionY -141
+      OffsetTop -141
       SizeX 640
       OffsetRight 260
       SizeY 32
-      OffsetBottom 74
+      OffsetBottom 109
      }
      Color 1 1 1 1
-     Text "8 PGM  type a new frequency"
+     Text "7 OPT  options: volume, power, ears, monitor, light, clock"
      "Font Size" 26
      "Min Font Size" 18
      "Horizontal Alignment" Left
@@ -867,15 +907,15 @@ FrameWidgetClass {
       Anchor 0.5 0.5 0.5 0.5
       PositionX -900
       OffsetLeft -900
-      PositionY -72
-      OffsetTop -72
+      PositionY -107
+      OffsetTop -107
       SizeX 640
       OffsetRight 260
       SizeY 32
-      OffsetBottom 40
+      OffsetBottom 75
      }
      Color 1 1 1 1
-     Text "2 LT  backlight"
+     Text "8 PGM  type a new frequency"
      "Font Size" 26
      "Min Font Size" 18
      "Horizontal Alignment" Left
@@ -893,15 +933,15 @@ FrameWidgetClass {
       Anchor 0.5 0.5 0.5 0.5
       PositionX -900
       OffsetLeft -900
-      PositionY -38
-      OffsetTop -38
+      PositionY -73
+      OffsetTop -73
       SizeX 640
       OffsetRight 260
       SizeY 32
-      OffsetBottom 6
+      OffsetBottom 41
      }
      Color 1 1 1 1
-     Text "6 and 9  up and down inside menus"
+     Text "2 LT  light: off / auto / on"
      "Font Size" 26
      "Min Font Size" 18
      "Horizontal Alignment" Left
@@ -919,12 +959,38 @@ FrameWidgetClass {
       Anchor 0.5 0.5 0.5 0.5
       PositionX -900
       OffsetLeft -900
-      PositionY -4
-      OffsetTop -4
+      PositionY -39
+      OffsetTop -39
       SizeX 640
       OffsetRight 260
       SizeY 32
-      OffsetBottom -28
+      OffsetBottom 7
+     }
+     Color 1 1 1 1
+     Text "6 and 9  up and down inside menus"
+     "Font Size" 26
+     "Min Font Size" 18
+     "Horizontal Alignment" Left
+     "Vertical Alignment" Center
+     FontProperties FontProperties "{6D68BE14DBAF9CED}" {
+      Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
+      ShadowSize 4
+      ShadowOffset 0 0
+      ShadowOpacity 0.8
+     }
+    }
+    TextWidgetClass "{6D62533E7E6D3945}" {
+     Name "HelpLegend5"
+     Slot FrameWidgetSlot "{6D0AA090B5CA67A8}" {
+      Anchor 0.5 0.5 0.5 0.5
+      PositionX -900
+      OffsetLeft -900
+      PositionY -5
+      OffsetTop -5
+      SizeX 640
+      OffsetRight 260
+      SizeY 32
+      OffsetBottom -27
      }
      Color 1 1 1 1
      Text "Number pad  type a frequency"
@@ -932,7 +998,7 @@ FrameWidgetClass {
      "Min Font Size" 18
      "Horizontal Alignment" Left
      "Vertical Alignment" Center
-     FontProperties FontProperties "{6D68BE14DBAF9CED}" {
+     FontProperties FontProperties "{6D37BD7E6D5A417A}" {
       Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
       ShadowSize 4
       ShadowOffset 0 0

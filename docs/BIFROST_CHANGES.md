@@ -94,6 +94,37 @@ Each radio keeps its own picture; its keys and screen were rebuilt (`CVON_RadioM
 - **Net names.** Channels show the net's name from the frequency config: a group's new `m_sNetName`
   ("1 PLT NET") or, if empty, its first group name (long-range nets get "LR").
 
+### Knobs and lights work like the real radios
+
+Each radio's controls were checked against its real counterpart (operator manuals and datasheets where they
+exist; the ledger with sources is [RADIO_CONTROLS.md](RADIO_CONTROLS.md)). The art is cut from the radios' own
+pictures by `tools/uigen/gen_radio_art.py`; the layouts are built by `tools/uigen/gen_radio_lcd.py`.
+
+- **Knobs turn.** A knob turns to the position the radio is in and eases there, instead of swapping between two
+  pictures. Positions are read off the markings printed round each knob on the radio.
+  - AN/PRC-117G and AN/PRC-150: the function knob (power is its OFF position, as on the real radios) turns
+    to OFF, or to PT / CT to match the radio's crypto.
+  - AN/PRC-152: the top function knob, OFF, presets 1-5, S (scan), F (front panel), Z, 36 degrees apart.
+    Click its left or right half to turn it a position: OFF switches off, 1-5 pick that preset, S shows
+    SCAN N/A, F leaves presets to the PRE keys. Z can't be reached by a click (pull-to-turn on the real one).
+    On a preset position the PRE keys turn the knob with them.
+  - R-168: the channel lever (KANAL 1-7) turns with the channel and can be clicked to turn (presets past 7,
+    reached with the + key, leave it on 7); the volume knob's
+    index sweeps from its 0 mark to its end mark as the volume changes; the power toggle flips however the radio
+    was switched.
+  - R-187 Azart: no knobs. The keypad cover the old art showed isn't on the real radio and is gone; power is the
+    red key held for a second, as on the real one.
+- **Lights.** The light setting is OFF, AUTO or ON (2 LT on the Harris radios steps through them, or OPT >
+  LIGHT). AUTO is the Harris "momentary" light: on with any key press, off 10 s after the last one.
+  - Harris radios: the keypad legends light NVG green together with the display.
+  - R-168: the РЖ (mode) key opens the options and its LED lights while they are open; the ТМ (speech masking)
+    LED lights while the radio is on crypto (CT).
+  - R-187: display light only (no keypad light or LEDs described for the real radio).
+- **Not modelled:** the PRC-152's separate PT / LD / CT switch, the R-168's МШ / МАЛ and РРУ / АРУ toggles, its
+  mode switch and ТЛФ / ТЛГ knobs (no manual for this exact panel was found, so they stay as drawn). The R-168
+  volume knob's index line is drawn by us: the panel has the 0 and end marks, the knob in the picture had no
+  pointer. The backlight colours are not given in any source; green is from photos.
+
 ### New radio pop-up
 
 - **New radio pop-up.** Replaces the small box clipped at the left edge: radio name, a coloured state
@@ -213,6 +244,15 @@ code is used.
   work). Self-test now 211 checks, all passed, including the compact pop-up's size, TX / RX, the ear tag and
   name trimming. The game log has no more resource errors from this mod. Screenshots of the compact pop-up
   checked by eye.
+- Knobs and lights: the same self-test, now 257 checks, all passed. They cover:
+  - the function knobs following power and crypto and easing into place;
+  - every PRC-152 knob position, including the OFF and F end stops and PRE keys on F;
+  - the R-168 lever and volume index, the РЖ and ТМ lights and the power toggle;
+  - the R-187 red key: a short hold, a 1 s hold and the swallowed release click;
+  - the OFF / AUTO / ON light, including AUTO going out.
+
+  Screenshots of every radio on, lit and off checked by eye. The new textures were built by a headless
+  Workbench pass.
 - **Not tested here (needs players and TeamSpeak):** hearing the monitored net, the pop-up during a real
   call, auto key fill with real crews, handheld speaker heard by others, terrain static in a real call.
 

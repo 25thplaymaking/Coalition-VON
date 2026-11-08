@@ -49,6 +49,21 @@ def text(radio, name, x, y, w, h, t, size, c, font=DIGI, align='Left', ind=2, sh
     out += [p + ' }', p + '}']
     return out
 
+def tex_rect(tx, ty, tw, th):
+    """Texture pixels (2560 x 1440, the radio pictures) to layout units from the centre."""
+    return (tx * 0.75 - 960, ty * 0.75 - 540, tw * 0.75, th * 0.75)
+
+FULL = (-960, -540, 1920, 1080)
+
+def picture(radio, name, rect, texture, size, visible=True, ind=2):
+    x, y, w, h = rect
+    p = ' ' * ind
+    out = [p + 'ImageWidgetClass "%s" {' % wid(radio, name), p + ' Name "%s"' % name] + slot(radio, name, x, y, w, h, ind + 1)
+    if not visible:
+        out.append(p + ' "Is Visible" 0')
+    out += [p + ' Texture "%s"' % texture, p + ' Size %d %d' % size, p + '}']
+    return out
+
 def button(radio, name, x, y, w, h, tip):
     p = '  '
     return [p + 'ButtonWidgetClass "%s" {' % wid(radio, name), p + ' Name "%s"' % name] + slot(radio, name, x, y, w, h, 3) + [
@@ -61,6 +76,27 @@ HARRIS_HELP = {'Menu Up': 'Next preset', 'Menu Down': 'Prev preset', 'Clear': 'T
                'Enter': 'Store / select', 'Power': 'Power on / off'}
 LCD_GREEN = (0.62, 1.0, 0.45, 0.32)
 
+# Animated knobs and lights (art from gen_radio_art.py). Pictures go right above the radio picture, under the
+# key hot spots; textures are the imported .edds resources.
+def keys_lit(radio, guid):
+    return [('KeysLit', FULL, '{%s}UI/layouts/Radios/%s/data/%sKeys.edds' % (guid, radio, radio), (2560, 1440), False)]
+
+R168_TEX = 'UI/layouts/Radios/R168/data/'
+R168_PICTURES = [
+    ('ChannelShadow', tex_rect(1855, 785, 264, 264), '{F0681274B159786D}' + R168_TEX + 'R168ChannelShadow.edds', (264, 264), True),
+    ('ChannelKnob', tex_rect(1849, 771, 264, 264), '{8A402413CB1B6BC1}' + R168_TEX + 'R168Channel.edds', (264, 264), True),
+    ('VolumeIndex', tex_rect(2164, 923, 112, 112), '{0BFE4BA3D3CA39DA}' + R168_TEX + 'R168VolumeIndex.edds', (112, 112), True),
+    ('ModeLight', tex_rect(1094, 803, 80, 68), '{BF433C4608425926}' + R168_TEX + 'R168KeyLight.edds', (80, 68), False),
+    ('MaskLight', tex_rect(1090, 1091, 80, 68), '{BF433C4608425926}' + R168_TEX + 'R168KeyLight.edds', (80, 68), False),
+]
+R168_BUTTONS = [('ChannelDown',) + tex_rect(1919, 841, 62, 124) + ('Channel knob: turn left',),
+                ('ChannelUp',) + tex_rect(1981, 841, 62, 124) + ('Channel knob: turn right',),
+                ('ModeKey',) + tex_rect(1094, 804, 80, 66) + ('Mode (options)',)]
+# AN/PRC-152 top function knob: the drum frames are swapped by CVON_RadioMenu; two halves turn it
+PRC152_KNOB = ('Knob', tex_rect(1286, 140, 104, 116), '{3DB0A91F32090092}UI/layouts/Radios/ANPRC152/data/ANPRC152Knob_1.edds', (104, 116), True)
+PRC152_BUTTONS = [('KnobDown',) + tex_rect(1286, 140, 52, 116) + ('Turn knob left',),
+                  ('KnobUp',) + tex_rect(1338, 140, 52, 116) + ('Turn knob right',)]
+
 # Rects are layout units (1920x1080 reference, from the centre), measured on the radio pictures.
 # lines: (name, top offset in the LCD, height, font size, align)
 RADIOS = {
@@ -69,25 +105,29 @@ RADIOS = {
         lcd=(-79, -113, 212, 66), pad=(7, 4), glow=LCD_GREEN,
         lines=[('LcdStatus', 0, 15, 15), ('LcdName', 15, 16, 16), ('LcdMain', 31, 27, 29)],
         vol=None,
-        help=dict(HARRIS_HELP, **{'Menu Left': 'Volume down', 'Menu Right': 'Volume up'}),
-        legend=(-900, -140), legend_lines=['7 OPT  options: volume, power, ears, monitor, light, clock', '8 PGM  type a new frequency',
-                                           '2 LT  backlight', '6 and 9  up and down inside menus', 'Number pad  type a frequency']),
+        help=dict(HARRIS_HELP, **{'Menu Left': 'Volume down', 'Menu Right': 'Volume up', 'Power': 'Knob: OFF, presets 1-5, S, F'}),
+        legend=(-900, -175), legend_lines=['Top knob  click a half to turn: OFF, presets 1-5, S scan, F front panel',
+                                           '7 OPT  options: volume, power, ears, monitor, light, clock', '8 PGM  type a new frequency',
+                                           '2 LT  light: off / auto / on', '6 and 9  up and down inside menus', 'Number pad  type a frequency'],
+        pictures=keys_lit('ANPRC152', 'B1D95022EE5B0282'), knob=PRC152_KNOB, buttons=PRC152_BUTTONS, remove=['Power']),
     'ANPRC117': dict(
         bars=(262, 1, 26),
         lcd=(-195, -201, 514, 171), pad=(16, 10), glow=LCD_GREEN,
         lines=[('LcdStatus', 0, 28, 28), ('LcdName', 30, 32, 30), ('LcdMain', 62, 56, 58), ('LcdInfo', 120, 30, 26)],
         vol=[('VolUp', -218, 40, 76, 68, 'Volume up'), ('VolDown', -218, 110, 76, 68, 'Volume down')],
-        help=dict(HARRIS_HELP, **{'Menu Left': 'Options', 'Menu Right': 'Options'}),
+        help=dict(HARRIS_HELP, **{'Menu Left': 'Options', 'Menu Right': 'Options', 'Power': 'Knob: OFF / PT / CT'}),
         legend=(-900, -525), legend_lines=['VOL + / -  volume', '7 OPT  options: power, ears, monitor, light, clock', '8 PGM  type a new frequency',
-                                          '2 LT  backlight     6 and 9  up and down inside menus', 'Number pad  type a frequency']),
+                                          '2 LT  light: off / auto / on     6 and 9  up and down inside menus', 'Number pad  type a frequency'],
+        pictures=keys_lit('ANPRC117', 'CF959279DAF8E047')),
     'ANPRC150': dict(
         bars=(150, 0, 16),
         lcd=(-408, -180, 293, 88), pad=(8, 4), glow=LCD_GREEN,
         lines=[('LcdStatus', 0, 17, 17), ('LcdName', 17, 18, 17), ('LcdMain', 35, 29, 30), ('LcdInfo', 64, 16, 15)],
         vol=[('VolUp', -476, 38, 52, 62, 'Volume up'), ('VolDown', -476, 100, 52, 62, 'Volume down')],
-        help=dict(HARRIS_HELP, **{'Menu Left': 'Options', 'Menu Right': 'Options'}),
+        help=dict(HARRIS_HELP, **{'Menu Left': 'Options', 'Menu Right': 'Options', 'Power': 'Knob: OFF / PT / CT'}),
         legend=(-900, -525), legend_lines=['VOL + / -  volume', '7 OPT  options: power, ears, monitor, light, clock', '8 PGM  type a new frequency',
-                                          '2 LT  backlight     6 and 9  up and down inside menus', 'Number pad  type a frequency']),
+                                          '2 LT  light: off / auto / on     6 and 9  up and down inside menus', 'Number pad  type a frequency'],
+        pictures=keys_lit('ANPRC150', '3D4DF89DE90A8BF0')),
     'R168': dict(
         bars=(200, 0, 20),
         lcd=(-151, -101, 405, 102), pad=(12, 6), glow=(0.55, 0.06, 0.03, 0.35),
@@ -95,19 +135,23 @@ RADIOS = {
         vol=[('VolDown', 645, 148, 45, 90, 'Volume down'), ('VolUp', 690, 148, 45, 90, 'Volume up')],
         help={'Menu Up': 'Next channel', 'Menu Down': 'Prev channel', 'Menu Left': 'Options', 'Menu Right': 'Options',
               'Clear': 'Clear / back', 'Enter': 'Store', 'Power': 'Power on / off'},
-        legend=(-900, -505), legend_lines=['Volume knob  left half down, right half up', 'Digits  type a frequency, T stores it',
-                                           'TM / H  options: power, ears, monitor, light, clock', '+ / -  change a value inside options',
-                                           'Number pad  type a frequency']),
+        legend=(-900, -505), legend_lines=['Volume knob  left half down, right half up', 'КАНАЛ knob  click a half to change channel 1-7',
+                                           'Digits  type a frequency, T stores it',
+                                           'РЖ, TM or H  options: power, ears, monitor, light, clock (РЖ lights up)',
+                                           '+ / -  change a value inside options', 'Number pad  type a frequency'],
+        pictures=R168_PICTURES, buttons=R168_BUTTONS),
     'R187': dict(
         bars=(2, 124, 24),
         lcd=(-70, -240, 132, 172), pad=(6, 8), glow=LCD_GREEN,
         lines=[('LcdStatus', 0, 18, 17), ('LcdName', 24, 20, 18), ('LcdMain', 52, 36, 36), ('LcdInfo', 96, 18, 13)],
         vol=[('VolUp', -133, -224, 20, 34, 'Volume up'), ('VolDown', -133, -150, 20, 34, 'Volume down')],
         help={'Menu Up': 'Next channel', 'Menu Down': 'Prev channel', 'Menu Left': 'Options', 'Menu Right': 'Options',
-              'Clear': 'Clear / back', 'Enter': 'Store', 'Power': 'Power on / off'},
-        legend=(-900, -300), legend_lines=['Side keys  volume', 'Digits  type a frequency, green key stores it',
+              'Clear': 'Back (hold: power)', 'Enter': 'Store', 'Power': ''},
+        legend=(-900, -300), legend_lines=['Red key  hold 1 s to switch on or off', 'Side keys  volume',
+                                           'Digits  type a frequency, green key stores it',
                                            'Top soft keys  options: power, ears, monitor, light, clock', 'Up / down  change a value inside options',
-                                           'Number pad  type a frequency']),
+                                           'Number pad  type a frequency'],
+        remove=['Knob', 'Power']),
 }
 
 def block_range(lines, name, indent):
@@ -160,6 +204,28 @@ for radio, cfg in RADIOS.items():
         s, _ = block_range(lines, 'Power', 2)
         keys = []
         for name, kx, ky, kw, kh, tip in cfg['vol']:
+            keys += button(radio, name, kx, ky, kw, kh, tip)
+        lines[s:s] = keys
+
+    # Animated knobs and lights: pictures right above the radio picture, a replaced knob, extra hot spots, and
+    # parts the real radio doesn't have (the R-187's keypad cover) taken out
+    for name in cfg.get('remove', []):
+        s, e = block_range(lines, name, 2)
+        del lines[s:e + 1]
+    if cfg.get('knob'):
+        name, rect, tex, size, visible = cfg['knob']
+        s, e = block_range(lines, name, 2)
+        lines[s:e + 1] = picture(radio, name, rect, tex, size, visible)
+    if cfg.get('pictures'):
+        _, e = block_range(lines, 'Image0', 2)
+        pics = []
+        for name, rect, tex, size, visible in cfg['pictures']:
+            pics += picture(radio, name, rect, tex, size, visible)
+        lines[e + 1:e + 1] = pics
+    if cfg.get('buttons'):
+        s, _ = block_range(lines, 'Panel0', 2)
+        keys = []
+        for name, kx, ky, kw, kh, tip in cfg['buttons']:
             keys += button(radio, name, kx, ky, kw, kh, tip)
         lines[s:s] = keys
 

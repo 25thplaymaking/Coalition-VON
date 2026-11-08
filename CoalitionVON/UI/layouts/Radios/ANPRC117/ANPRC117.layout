@@ -17,6 +17,23 @@ FrameWidgetClass {
    Texture "{3F60BBE12269B784}UI/layouts/Radios/ANPRC117/data/ANPRC117.edds"
    Size 782 419
   }
+  ImageWidgetClass "{6D097E02D151A760}" {
+   Name "KeysLit"
+   Slot FrameWidgetSlot "{6D0B93B1A5F90277}" {
+    Anchor 0.5 0.5 0.5 0.5
+    PositionX -960
+    OffsetLeft -960
+    PositionY -540
+    OffsetTop -540
+    SizeX 1920
+    OffsetRight -960
+    SizeY 1080
+    OffsetBottom -540
+   }
+   "Is Visible" 0
+   Texture "{CF959279DAF8E047}UI/layouts/Radios/ANPRC117/data/ANPRC117Keys.edds"
+   Size 2560 1440
+  }
   ImageWidgetClass "{6DE710C156352B58}" {
    Name "LcdGlow"
    Slot FrameWidgetSlot "{6D9B84A9E2C6C03C}" {
@@ -723,7 +740,7 @@ FrameWidgetClass {
      }
      Text "Next preset"
      "Horizontal Alignment" Left
-     FontProperties FontProperties "{6D846E3A8FAC6CA6}" {
+     FontProperties FontProperties "{6DC4ED611332950D}" {
       Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
       ShadowSize 4
       ShadowOffset 0 0
@@ -745,7 +762,7 @@ FrameWidgetClass {
      }
      Text "Prev preset"
      "Horizontal Alignment" Left
-     FontProperties FontProperties "{6D03C976C2D2D3F3}" {
+     FontProperties FontProperties "{6D862E4BBAA34BAB}" {
       Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
       ShadowSize 4
       ShadowOffset 0 0
@@ -767,7 +784,7 @@ FrameWidgetClass {
      }
      Text "Options"
      "Horizontal Alignment" Center
-     FontProperties FontProperties "{6D32B96032C095DD}" {
+     FontProperties FontProperties "{6D1FA4C89A653006}" {
       Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
       ShadowSize 4
       ShadowOffset 0 0
@@ -789,7 +806,7 @@ FrameWidgetClass {
      }
      Text "Type freq / back"
      "Horizontal Alignment" Right
-     FontProperties FontProperties "{6D62A2EF1054F58B}" {
+     FontProperties FontProperties "{6D914FE3E9AEC38A}" {
       Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
       ShadowSize 4
       ShadowOffset 0 0
@@ -811,7 +828,7 @@ FrameWidgetClass {
      }
      Text "Store / select"
      "Horizontal Alignment" Left
-     FontProperties FontProperties "{6D530184433D622F}" {
+     FontProperties FontProperties "{6DDB3664501A683C}" {
       Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
       ShadowSize 4
       ShadowOffset 0 0
@@ -833,7 +850,7 @@ FrameWidgetClass {
      }
      Text "Options"
      "Horizontal Alignment" Left
-     FontProperties FontProperties "{6DF684B2CD3D8C0E}" {
+     FontProperties FontProperties "{6D12B089FC3A1BB6}" {
       Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
       ShadowSize 4
       ShadowOffset 0 0
@@ -853,9 +870,9 @@ FrameWidgetClass {
       SizeY -1050
       OffsetBottom 912.172
      }
-     Text "Power on / off"
+     Text "Knob: OFF / PT / CT"
      "Horizontal Alignment" Left
-     FontProperties FontProperties "{6D8C0A61A20907A3}" {
+     FontProperties FontProperties "{6D2B7E85E1F94E15}" {
       Font "{EABA4FE9D014CCEF}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
       ShadowSize 4
       ShadowOffset 0 0
@@ -969,7 +986,7 @@ FrameWidgetClass {
       OffsetBottom 391
      }
      Color 1 1 1 1
-     Text "2 LT  backlight     6 and 9  up and down inside menus"
+     Text "2 LT  light: off / auto / on     6 and 9  up and down inside menus"
      "Font Size" 26
      "Min Font Size" 18
      "Horizontal Alignment" Left
