@@ -2417,12 +2417,56 @@ static void write_text_file(const char* path, const char* text)
     fclose(f);
 }
 
-static void write_plugin_info(void)
+/* The player's TeamSpeak state, for the game's join notice. Each value is 0 or 1. */
+typedef struct {
+    int connected;  /* the active server tab is connected to a server */
+    int inChannel;  /* we are in the game's VON channel */
+    int micMuted;   /* the player's own microphone mute in TeamSpeak */
+    int soundMuted; /* the player's own speaker mute in TeamSpeak */
+} PluginState;
+
+static PluginState g_lastInfoState = {-1, -1, -1, -1};
+
+static void read_plugin_state(uint64 sch, PluginState* st)
 {
-    char buf[256];
-    _snprintf(buf, sizeof(buf), "{\"Version\":\"%s\",\"Features\":\"%s\",\"Time\":%lld}", ts3plugin_version(), PLUGIN_FEATURES, (long long)_time64(NULL));
-    buf[sizeof(buf) - 1] = '\0';
+    memset(st, 0, sizeof(*st));
+    int status = 0;
+    if (!sch || ts3Functions.getConnectionStatus(sch, &status) != ERROR_ok || status != STATUS_CONNECTION_ESTABLISHED)
+        return;
+    st->connected = 1;
+    st->inChannel = InterlockedCompareExchange(&g_inVonActiveFlag, 0, 0) ? 1 : 0;
+    int v = 0;
+    if (ts3Functions.getClientSelfVariableAsInt(sch, CLIENT_INPUT_MUTED, &v) == ERROR_ok)
+        st->micMuted = v ? 1 : 0;
+    v = 0;
+    if (ts3Functions.getClientSelfVariableAsInt(sch, CLIENT_OUTPUT_MUTED, &v) == ERROR_ok)
+        st->soundMuted = v ? 1 : 0;
+}
+
+static void format_plugin_info(char* buf, size_t size, const char* version, const char* features, long long now, const PluginState* st)
+{
+    _snprintf(buf, size, "{\"Version\":\"%s\",\"Features\":\"%s\",\"Time\":%lld,\"Connected\":%d,\"InChannel\":%d,\"MicMuted\":%d,\"SoundMuted\":%d}",
+              version, features, now, st->connected, st->inChannel, st->micMuted, st->soundMuted);
+    buf[size - 1] = '\0';
+}
+
+static void write_plugin_info(uint64 sch)
+{
+    PluginState st;
+    read_plugin_state(sch, &st);
+    char buf[384];
+    format_plugin_info(buf, sizeof(buf), ts3plugin_version(), PLUGIN_FEATURES, (long long)_time64(NULL), &st);
     write_text_file(g_InfoPath, buf);
+    g_lastInfoState = st;
+}
+
+/* Rewrites VONPluginInfo.json straight away when the player's TeamSpeak state changes */
+static void write_plugin_info_if_state_changed(uint64 sch)
+{
+    PluginState st;
+    read_plugin_state(sch, &st);
+    if (memcmp(&st, &g_lastInfoState, sizeof(st)) != 0)
+        write_plugin_info(sch);
 }
 
 static void set_talking(anyID clientID, int talking)
@@ -2748,7 +2792,7 @@ static unsigned long WINAPI worker_main(LPVOID param)
 
         if (now >= g_nextInfoWriteTick) {
             g_nextInfoWriteTick = now + INFO_WRITE_MS;
-            write_plugin_info();
+            write_plugin_info(sch);
         }
 
         /* ---------------- Slow path ---------------- */
@@ -2760,6 +2804,7 @@ static unsigned long WINAPI worker_main(LPVOID param)
             try_ensure_move(sch);
             try_return_to_previous(sch);
             update_von_active_flag(sch);
+            write_plugin_info_if_state_changed(sch);
 
             /* What other players see in TeamSpeak's info panel when they select us */
             int state = CVON_STATE_NOT_IN_GAME;
@@ -2818,15 +2863,15 @@ PLUGINS_EXPORTDLL const char* ts3plugin_name()
 {
     static char* result = NULL;
     if (!result) {
-        const wchar_t* name = L"Coalition TeamSpeak Plugin";
+        const wchar_t* name = L"Bifrost VON TeamSpeak Plugin (Coalition VON fork)";
         if (wcharToUtf8(name, &result) == -1)
-            result = "Coalition TeamSpeak Plugin";
+            result = "Bifrost VON TeamSpeak Plugin (Coalition VON fork)";
     }
     return result;
 }
 PLUGINS_EXPORTDLL const char* ts3plugin_version()
 {
-    return "3.0.1";
+    return "3.1.0";
 }
 PLUGINS_EXPORTDLL int ts3plugin_apiVersion()
 {
@@ -2834,11 +2879,11 @@ PLUGINS_EXPORTDLL int ts3plugin_apiVersion()
 }
 PLUGINS_EXPORTDLL const char* ts3plugin_author()
 {
-    return "Salami";
+    return "Salami & Coalition contributors; Bifrost fork by Task Force Halberd";
 }
 PLUGINS_EXPORTDLL const char* ts3plugin_description()
 {
-    return "A tool for Arma Reforger to communicate with Teamspeak - includes proximity-based automatic muting";
+    return "Bifrost VON for Arma Reforger: proximity voice and radios over TeamSpeak. A fork of the Coalition TeamSpeak Plugin by CoalitionArma, used under the Arma Public License (APL). Not endorsed by CoalitionArma.";
 }
 PLUGINS_EXPORTDLL void ts3plugin_setFunctionPointers(const struct TS3Functions funcs)
 {
@@ -2905,7 +2950,7 @@ PLUGINS_EXPORTDLL int ts3plugin_init()
 
     read_serverdata_from_disk();
     write_serverdata_if_changed(0);
-    write_plugin_info();
+    write_plugin_info(ts3Functions.getCurrentServerConnectionHandlerID());
 
     InterlockedExchange(&g_workerQuit, 0);
     g_quitEvent    = CreateEventA(NULL, TRUE, FALSE, NULL);
@@ -3144,12 +3189,89 @@ static inline void silence_samples(short* samples, int sampleCount, int channels
 }
 
 /* ---------------------------------------------------------------------------
+   Speaker layout (Bifrost fix)
+
+   TeamSpeak hands this callback a buffer laid out by channelSpeakerArray, with only the channels in
+   *channelFillMask holding sound. The DSP below was written for "channel 0 = left, channel 1 = right"
+   and never set the fill mask, so on many playback setups a left- or right-only radio came out in the
+   wrong ear, in both, or not at all. The DSP now always runs on a plain stereo buffer, and the result is
+   spread over the real speakers: left-side speakers get the left signal, right-side the right, centre
+   speakers the average, the subwoofer nothing. Every channel written is marked filled.
+--------------------------------------------------------------------------- */
+enum { SPK_ROLE_CENTER = 0, SPK_ROLE_LEFT = 1, SPK_ROLE_RIGHT = 2, SPK_ROLE_LFE = 3 };
+
+#define SPK_LEFT_MASK  (SPEAKER_FRONT_LEFT | SPEAKER_BACK_LEFT | SPEAKER_FRONT_LEFT_OF_CENTER | SPEAKER_SIDE_LEFT | SPEAKER_TOP_FRONT_LEFT | SPEAKER_TOP_BACK_LEFT | SPEAKER_HEADPHONES_LEFT)
+#define SPK_RIGHT_MASK (SPEAKER_FRONT_RIGHT | SPEAKER_BACK_RIGHT | SPEAKER_FRONT_RIGHT_OF_CENTER | SPEAKER_SIDE_RIGHT | SPEAKER_TOP_FRONT_RIGHT | SPEAKER_TOP_BACK_RIGHT | SPEAKER_HEADPHONES_RIGHT)
+
+static int speaker_role(const unsigned int* channelSpeakerArray, int ch)
+{
+    if (!channelSpeakerArray) /* no layout given: the old assumption */
+        return ch == 0 ? SPK_ROLE_LEFT : (ch == 1 ? SPK_ROLE_RIGHT : SPK_ROLE_CENTER);
+
+    const unsigned int spk = channelSpeakerArray[ch];
+    if (spk & SPK_LEFT_MASK)
+        return SPK_ROLE_LEFT;
+    if (spk & SPK_RIGHT_MASK)
+        return SPK_ROLE_RIGHT;
+    if (spk & SPEAKER_LOW_FREQUENCY)
+        return SPK_ROLE_LFE;
+    return SPK_ROLE_CENTER;
+}
+
+static inline int channel_filled(const unsigned int* channelFillMask, int ch)
+{
+    if (!channelFillMask || ch >= 32)
+        return 1;
+    return ((*channelFillMask) >> ch) & 1u;
+}
+
+/* Mono from whichever channels TeamSpeak filled, into an interleaved L/R buffer */
+static void layout_gather_stereo(const short* samples, int frames, int channels, const unsigned int* channelFillMask, short* stereo)
+{
+    for (int i = 0; i < frames; ++i) {
+        int sum = 0, used = 0;
+        for (int ch = 0; ch < channels; ++ch) {
+            if (!channel_filled(channelFillMask, ch))
+                continue;
+            sum += samples[i * channels + ch];
+            ++used;
+        }
+        const short mono = used ? (short)(sum / used) : 0;
+        stereo[i * 2 + 0] = mono;
+        stereo[i * 2 + 1] = mono;
+    }
+}
+
+/* Interleaved L/R back onto the real speaker layout */
+static void layout_scatter_stereo(const short* stereo, int frames, short* samples, int channels, const unsigned int* channelSpeakerArray)
+{
+    for (int ch = 0; ch < channels; ++ch) {
+        const int role = speaker_role(channelSpeakerArray, ch);
+        for (int i = 0; i < frames; ++i) {
+            const short L = stereo[i * 2 + 0];
+            const short R = stereo[i * 2 + 1];
+            short out;
+            switch (role) {
+            case SPK_ROLE_LEFT:  out = L; break;
+            case SPK_ROLE_RIGHT: out = R; break;
+            case SPK_ROLE_LFE:   out = 0; break;
+            default:             out = (short)(((int)L + (int)R) / 2); break;
+            }
+            samples[i * channels + ch] = out;
+        }
+    }
+}
+
+static void process_voice_stereo(anyID clientID, short* samples, int sampleCount, int channels);
+
+#define LAYOUT_CHUNK_FRAMES 1024
+
+/* ---------------------------------------------------------------------------
    Audio (pure DSP)
 --------------------------------------------------------------------------- */
 PLUGINS_EXPORTDLL void ts3plugin_onEditPostProcessVoiceDataEvent(uint64 sch, anyID clientID, short* samples, int sampleCount, int channels, const unsigned int* channelSpeakerArray, unsigned int* channelFillMask)
 {
-    (void)channelSpeakerArray;
-    (void)channelFillMask;
+    (void)sch;
 
     if (InterlockedCompareExchange(&g_inVonActiveFlag, 0, 0) == 0)
         return; /* leave TS audio untouched */
@@ -3157,6 +3279,29 @@ PLUGINS_EXPORTDLL void ts3plugin_onEditPostProcessVoiceDataEvent(uint64 sch, any
     if (!samples || sampleCount <= 0 || channels <= 0)
         return;
 
+    if (channels == 1) {
+        process_voice_stereo(clientID, samples, sampleCount, 1);
+        return;
+    }
+
+    short work[LAYOUT_CHUNK_FRAMES * 2];
+    for (int offset = 0; offset < sampleCount; offset += LAYOUT_CHUNK_FRAMES) {
+        int frames = sampleCount - offset;
+        if (frames > LAYOUT_CHUNK_FRAMES)
+            frames = LAYOUT_CHUNK_FRAMES;
+        short* chunk = samples + (size_t)offset * channels;
+        layout_gather_stereo(chunk, frames, channels, channelFillMask, work);
+        process_voice_stereo(clientID, work, frames, 2);
+        layout_scatter_stereo(work, frames, chunk, channels, channelSpeakerArray);
+    }
+
+    if (channelFillMask)
+        *channelFillMask = channels >= 32 ? 0xFFFFFFFFu : ((1u << channels) - 1u);
+}
+
+/* channels is 1 (mono output) or 2 (interleaved left/right) */
+static void process_voice_stereo(anyID clientID, short* samples, int sampleCount, int channels)
+{
     const VonEntry* e = find_entry(clientID);
     if (!e) {
         silence_samples(samples, sampleCount, channels);
@@ -3184,6 +3329,9 @@ PLUGINS_EXPORTDLL void ts3plugin_onEditPostProcessVoiceDataEvent(uint64 sch, any
         int                  matched  = 0;
 
         if (hasRadio) {
+            /* Every local radio (or monitored channel) on the talker's net counts: their ears add up and
+               the loudest volume wins, so the same net on a left-ear and a right-ear radio plays in both. */
+            int earMask = 0; /* bit 0 left, bit 1 right */
             for (size_t i = 0; i < rSnap->count; ++i) {
                 RadioLocal* r = (RadioLocal*)&rSnap->list[i];
                 if (strcmp(r->freq, e->txFreq) != 0)
@@ -3194,11 +3342,13 @@ PLUGINS_EXPORTDLL void ts3plugin_onEditPostProcessVoiceDataEvent(uint64 sch, any
                 int vf = (e->txFaction[0] && strcmp(e->txFaction, "0") != 0);
                 if (rf && vf && strcmp(r->faction, e->txFaction) != 0)
                     continue;
-                vol01   = (float)r->volStep / 9.0f;
-                stereo  = r->stereo;
+                const float v = (float)r->volStep / 9.0f;
+                if (!matched || v > vol01)
+                    vol01 = v;
+                earMask |= (r->stereo == 1) ? 2 : (r->stereo == 2) ? 1 : 3;
                 matched = 1;
-                break;
             }
+            stereo = (earMask == 2) ? 1 : (earMask == 1) ? 2 : 0;
         }
 
         if (matched) {

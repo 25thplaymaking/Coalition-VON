@@ -187,6 +187,8 @@ class CVON_VehicleRadioComponent: CVON_RadioComponent
 		}
 
 		SelectStartingChannel();
+		//The channel list was rebuilt: a monitored channel number would now point at another net
+		m_iMonitorChannel = 0;
 		BumpAndNotify();
 	}
 
@@ -255,6 +257,47 @@ class CVON_VehicleRadioComponent: CVON_RadioComponent
 		}
 
 		return "";
+	}
+
+	//Automatic key fill (CVON_VONGameModeComponent.m_bAutoFillVehicleRadios): someone other than this
+	//character sits in a crew seat and is on the radio's current key, so getting in mustn't take it off them
+	//==========================================================================================================================================================================
+	bool IsKeyInUseByOtherCrew(IEntity character)
+	{
+		if (m_sFactionKey == "")
+			return false;
+
+		SCR_BaseCompartmentManagerComponent compartmentManager = SCR_BaseCompartmentManagerComponent.Cast(GetOwner().FindComponent(SCR_BaseCompartmentManagerComponent));
+		if (!compartmentManager)
+			return false;
+
+		array<BaseCompartmentSlot> seats = {};
+		compartmentManager.GetCompartments(seats);
+		foreach (BaseCompartmentSlot seat: seats)
+		{
+			IEntity occupant = seat.GetOccupant();
+			if (!occupant || occupant == character || !CVON_VehicleComms.IsCrewSeat(seat))
+				continue;
+
+			FactionAffiliationComponent factionComp = FactionAffiliationComponent.Cast(occupant.FindComponent(FactionAffiliationComponent));
+			if (factionComp && factionComp.GetAffiliatedFactionKey() != "" && SharesKey(factionComp.GetAffiliatedFactionKey()))
+				return true;
+		}
+		return false;
+	}
+
+	//Would getting in fill the radio with this character's key automatically
+	bool WouldAutoFill(IEntity character)
+	{
+		CVON_VONGameModeComponent gamemode = CVON_VONGameModeComponent.GetInstance();
+		if (!gamemode || !gamemode.m_bAutoFillVehicleRadios || !character)
+			return false;
+
+		FactionAffiliationComponent factionComp = FactionAffiliationComponent.Cast(character.FindComponent(FactionAffiliationComponent));
+		if (!factionComp || factionComp.GetAffiliatedFactionKey() == "" || SharesKey(factionComp.GetAffiliatedFactionKey()))
+			return false;
+
+		return !IsKeyInUseByOtherCrew(character);
 	}
 
 	//Already on this key: the faction's own, or a shared-frequency key listing it ("US|BLUFOR|")

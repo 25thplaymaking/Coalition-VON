@@ -30,13 +30,18 @@ class CVON_WarningMenu: ChimeraMenuBase
 		super.OnMenuUpdate(tDelta);
 		if (m_PlayerController.GetTeamspeakClientId() == 0)
 		{
-			m_wExplanation.SetText("Teamspeak Plugin Not Detected!");
+			//A running plugin says whether TeamSpeak itself is connected, so "not detected" isn't shown wrongly
+			SCR_VONController von = SCR_VONController.Cast(m_PlayerController.FindComponent(SCR_VONController));
+			if (von && von.m_bPluginRunning && von.m_iPluginConnected == 0)
+				m_wExplanation.SetText("TeamSpeak is not connected to a server!");
+			else
+				m_wExplanation.SetText("Teamspeak Plugin Not Detected!");
 		}
-		else if (m_PlayerController.m_sTeamspeakPluginVersion != m_VONGamemode.m_sTeamspeakPluginVersion)
+		else if (!m_VONGamemode.IsPluginCompatible(m_PlayerController.m_sTeamspeakPluginVersion))
 		{
 			m_wExplanation.SetText(string.Format("Teamspeak Plugin Version Mismatch! Your Version: %1 || Latest Version: %2", m_PlayerController.m_sTeamspeakPluginVersion, m_VONGamemode.m_sTeamspeakPluginVersion));
 		}
-		if (m_PlayerController.GetTeamspeakClientId() != 0 && m_PlayerController.m_sTeamspeakPluginVersion == m_VONGamemode.m_sTeamspeakPluginVersion)
+		if (m_PlayerController.GetTeamspeakClientId() != 0 && m_VONGamemode.IsPluginCompatible(m_PlayerController.m_sTeamspeakPluginVersion))
 		{
 			m_PlayerController.m_bHasConnectedToTeamspeakForFirstTime = true;
 			Close();
@@ -45,7 +50,7 @@ class CVON_WarningMenu: ChimeraMenuBase
 	
 	override void OnMenuClose()
 	{
-		if (m_PlayerController.GetTeamspeakClientId() == 0 && m_PlayerController.m_sTeamspeakPluginVersion != m_VONGamemode.m_sTeamspeakPluginVersion)
+		if (m_PlayerController.GetTeamspeakClientId() == 0 && !m_VONGamemode.IsPluginCompatible(m_PlayerController.m_sTeamspeakPluginVersion))
 			GetGame().GetMenuManager().OpenMenu(ChimeraMenuPreset.CVON_WarningMenu);
 	}
 	

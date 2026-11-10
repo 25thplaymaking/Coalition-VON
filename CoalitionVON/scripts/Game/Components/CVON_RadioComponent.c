@@ -8,6 +8,14 @@ enum CVON_ERadioType
 	LONG
 }
 
+//Transmit power, like the LOW / MED / HIGH setting on the real radios: how far this radio is heard
+enum CVON_ETxPower
+{
+	LOW,
+	MEDIUM,
+	HIGH
+}
+
 class CVON_RadioComponent: ScriptComponent
 {
 	// What displays on the VON HUD
@@ -16,8 +24,22 @@ class CVON_RadioComponent: ScriptComponent
 	//Used for allocating the frequencies to the radios in the SCR_CallsignBlahBlahsomething. Also is how we sort it out so your active first is always your SR.
 	[Attribute("0", UIWidgets.ComboBox, "Used for sorting frequencies", "", enumType: CVON_ERadioType )] int m_eRadioType;
 
-	//How far it go...
+	//How far it go... (on HIGH power; see m_iTxPower)
 	[Attribute("5000")] int m_iRadioRange;
+
+	//Range on the lower power settings, as a share of m_iRadioRange. Radio range grows roughly with the square
+	//root of power, so a quarter of the range is about 1/16 of the power (5 W HIGH -> about 0.3 W LOW).
+	[Attribute("0.25", desc: "Range on LOW power, as a share of the radio range")] float m_fLowPowerRange;
+	[Attribute("0.5", desc: "Range on MEDIUM power, as a share of the radio range")] float m_fMediumPowerRange;
+
+	//Transmit power (CVON_ETxPower). Replicated: the server reads it when it works out who hears a call.
+	[RplProp()] int m_iTxPower = CVON_ETxPower.HIGH;
+
+	//What can be typed in on the keypad, in kHz. 5 kHz steps take the commo card's 31120 / 31130 style
+	//frequencies; the original only allowed 25 kHz steps (31125, 31150).
+	[Attribute("30000", desc: "Lowest frequency (kHz) that can be typed in")] int m_iMinFrequency;
+	[Attribute("87975", desc: "Highest frequency (kHz) that can be typed in")] int m_iMaxFrequency;
+	[Attribute("5", desc: "Tuning step (kHz): a typed frequency must be a multiple of this")] int m_iFrequencyStep;
 
 	//The Icon at the center of the VON Radial Menu
 	[Attribute("{D9F335476016F8D7}UI/layouts/Radios/ANPRC152/data/ANPRC152Icon.edds", UIWidgets.ResourcePickerThumbnail, "Icon in the center of the radial menu", params: "edds")] ResourceName m_sRadioIcon;
@@ -65,6 +87,14 @@ class CVON_RadioComponent: ScriptComponent
 
 	//What ear it comes out of, neither needs to be tracked across clients cause who gives af.
 	CVON_EStereo m_eStereo = CVON_EStereo.BOTH;
+
+	//Monitor (TFAR's "additional channel"): one more of this radio's channels is heard as well, in its own
+	//ear, so two nets play at once from one radio. 0 is off, else a channel number (1 = m_aChannels[0]).
+	//Replicated so the server routes that net's traffic to us; transmitting stays on the main channel.
+	[RplProp(onRplName: "OnRadioStateReplicated")] int m_iMonitorChannel = 0;
+
+	//The monitored channel's ear, local like m_eStereo
+	CVON_EStereo m_eMonitorStereo = CVON_EStereo.BOTH;
 
 	//Speaker: the radio plays out loud for the people around it, positioned where it is. Speakers start
 	//off; a vehicle's crew or a manpack's carrier turns theirs on (CanUseSpeaker / SpeakerOnByDefault).
@@ -217,6 +247,148 @@ class CVON_RadioComponent: ScriptComponent
 		BumpAndNotify();
 	}
 
+	//Is this a frequency the keypad accepts (m_iMinFrequency..m_iMaxFrequency in m_iFrequencyStep steps)
+	//==========================================================================================================================================================================
+	bool IsValidFrequency(int frequency)
+	{
+		int step = Math.Max(m_iFrequencyStep, 1);
+		return frequency >= m_iMinFrequency && frequency <= m_iMaxFrequency && frequency % step == 0;
+	}
+
+	//Monitor
+	//==========================================================================================================================================================================
+	//The monitored channel's frequency, "" when off or the channel no longer exists
+	string GetMonitorFrequency()
+	{
+		if (m_iMonitorChannel < 1 || m_iMonitorChannel > m_aChannels.Count())
+			return "";
+		return m_aChannels.Get(m_iMonitorChannel - 1);
+	}
+
+	//Net name for a frequency, shown on the radio display and the HUD: the owning group's m_sNetName,
+	//else its first group name, with " LR" for a long-range net. The faction's own groups win over the
+	//preset groups. "" when the frequency config doesn't list it.
+	string GetChannelLabel(string frequency)
+	{
+		CVON_VONGameModeComponent gamemode = CVON_VONGameModeComponent.GetInstance();
+		if (frequency == "" || !gamemode)
+			return "";
+
+		array<ref CVON_GroupFrequencyContainer> containers = {};
+		string factionKey = m_sOriginalFactionKey;
+		if (factionKey == "")
+			factionKey = m_sFactionKey;
+		array<string> keys = {};
+		factionKey.Split("|", keys, true);
+		FactionManager factionManager = GetGame().GetFactionManager();
+		if (factionManager && !keys.IsEmpty())
+		{
+			SCR_Faction faction = SCR_Faction.Cast(factionManager.GetFactionByKey(keys[0]));
+			if (faction && faction.GetCallsignInfo() && faction.GetCallsignInfo().m_aGroupFrequencyOverrides)
+			{
+				foreach (CVON_GroupFrequencyContainer overrideContainer: faction.GetCallsignInfo().m_aGroupFrequencyOverrides)
+					containers.Insert(overrideContainer);
+			}
+		}
+		if (gamemode.m_FreqConfig && gamemode.m_FreqConfig.m_aPresetGroupFrequencyContainers)
+		{
+			foreach (CVON_GroupFrequencyContainer presetContainer: gamemode.m_FreqConfig.m_aPresetGroupFrequencyContainers)
+				containers.Insert(presetContainer);
+		}
+
+		foreach (CVON_GroupFrequencyContainer container: containers)
+		{
+			if (!container)
+				continue;
+			bool shortRange = container.m_aSRFrequencies && container.m_aSRFrequencies.Contains(frequency);
+			bool longRange = container.m_aLRFrequencies && container.m_aLRFrequencies.Contains(frequency);
+			if (!shortRange && !longRange)
+				continue;
+
+			string name = container.m_sNetName;
+			if (name == "" && container.m_aGroupNames && !container.m_aGroupNames.IsEmpty())
+				name = container.m_aGroupNames[0];
+			if (name != "" && longRange && container.m_sNetName == "")
+				name += " LR";
+			return name;
+		}
+		return "";
+	}
+
+	//Transmit power
+	//==========================================================================================================================================================================
+	//Metres this radio is heard at on its current power setting
+	float GetTransmitRange()
+	{
+		switch (m_iTxPower)
+		{
+			case CVON_ETxPower.LOW: {return m_iRadioRange * m_fLowPowerRange;}
+			case CVON_ETxPower.MEDIUM: {return m_iRadioRange * m_fMediumPowerRange;}
+		}
+		return m_iRadioRange;
+	}
+
+	static string TxPowerText(int power)
+	{
+		switch (power)
+		{
+			case CVON_ETxPower.LOW: {return "LOW";}
+			case CVON_ETxPower.MEDIUM: {return "MED";}
+		}
+		return "HIGH";
+	}
+
+	//Authority
+	void UpdateTxPowerServer(int power)
+	{
+		m_iTxPower = Math.ClampInt(power, CVON_ETxPower.LOW, CVON_ETxPower.HIGH);
+		Replication.BumpMe();
+	}
+
+	//saveSettings false while settings are being restored
+	void SetTxPowerClient(int power, bool saveSettings = true)
+	{
+		SCR_PlayerController pc = SCR_PlayerController.Cast(GetGame().GetPlayerController());
+		if (!pc)
+			return;
+		pc.UpdateRadioTxPower(power, GetRplId());
+		//Shown straight away; the server's value replicates back
+		m_iTxPower = Math.ClampInt(power, CVON_ETxPower.LOW, CVON_ETxPower.HIGH);
+		if (saveSettings)
+			pc.UpdateSettings();
+	}
+
+	//Does this radio hear a transmission on this frequency: its main channel or the monitored one
+	bool ReceivesFrequency(string frequency)
+	{
+		if (frequency == "")
+			return false;
+		return m_sFrequency == frequency || GetMonitorFrequency() == frequency;
+	}
+
+	//Authority
+	void UpdateMonitorChannelServer(int channel)
+	{
+		if (channel < 0 || channel > m_aChannels.Count())
+			channel = 0;
+		m_iMonitorChannel = channel;
+		BumpAndNotify();
+	}
+
+	//saveSettings false while settings are being restored (saving then would overwrite the rest)
+	void SetMonitorChannelClient(int channel, bool saveSettings = true)
+	{
+		SCR_PlayerController pc = SCR_PlayerController.Cast(GetGame().GetPlayerController());
+		if (!pc)
+			return;
+		pc.UpdateRadioMonitorChannel(channel, GetRplId());
+		//Shown straight away; the server's value replicates back (OnRadioStateReplicated rewrites RadioData)
+		m_iMonitorChannel = channel;
+		WriteJSON(SCR_PlayerController.GetLocalControlledEntity());
+		if (saveSettings)
+			pc.UpdateSettings();
+	}
+
 	//Called on the authority, updates the TimeDeviation.
 	//==========================================================================================================================================================================
 	void AddChannelServer()
@@ -240,9 +412,13 @@ class CVON_RadioComponent: ScriptComponent
 		return false;
 	}
 
+	//Manpacks always; handheld radios too when the gamemode allows it (CVON_VONGameModeComponent.m_bHandheldSpeakers)
 	bool CanUseSpeaker()
 	{
-		return IsManpack();
+		if (IsManpack())
+			return true;
+		CVON_VONGameModeComponent gamemode = CVON_VONGameModeComponent.GetInstance();
+		return gamemode && gamemode.m_bHandheldSpeakers;
 	}
 
 	bool IsSpeakerOn()
@@ -400,7 +576,7 @@ class CVON_RadioComponent: ScriptComponent
 	{
 		SCR_PlayerController pc = SCR_PlayerController.Cast(GetGame().GetPlayerController());
 		pc.UpdateRadioFrequency(input, GetRplId());
-		GetGame().GetCallqueue().CallLater(pc.UpdateSettings, 500, false);
+		GetGame().GetCallqueue().CallLater(pc.UpdateSettings, 500, false, null);
 		WriteJSON(SCR_PlayerController.GetLocalControlledEntity());
 	}
 
@@ -664,6 +840,25 @@ class CVON_RadioComponent: ScriptComponent
 			VONSave.EndObject();
 			radioFreqs += radioComp.m_sFrequency + "|";
 			factionKeys += radioComp.m_sFactionKey + "|";
+
+			//The monitored channel is one more radio entry for the plugin (every plugin version plays all
+			//matching entries), in its own ear, and one more frequency for the server to route to us
+			string monitorFreq = radioComp.GetMonitorFrequency();
+			if (monitorFreq != "" && monitorFreq != radioComp.m_sFrequency)
+			{
+				VONSave.StartObject("M" + radio.ToString());
+				VONSave.WriteValue("Freq", monitorFreq);
+				VONSave.WriteValue("TimeDeviation", radioComp.m_iTimeDeviation);
+				VONSave.WriteValue("Volume", radioComp.m_iVolume);
+				VONSave.WriteValue("Stereo", radioComp.m_eMonitorStereo);
+				if (gamemode.IsEncryptionEnabled())
+					VONSave.WriteValue("FactionKey", radioComp.m_sFactionKey);
+				else
+					VONSave.WriteValue("FactionKey", "");
+				VONSave.EndObject();
+				radioFreqs += monitorFreq + "|";
+				factionKeys += radioComp.m_sFactionKey + "|";
+			}
 		}
 		//Listening to another player's radios (SCR_PlayerController.SetRadioListenTarget): theirs too, so the
 		//plugin plays their traffic as radio. Not in the frequency list sent to the server, which only routes

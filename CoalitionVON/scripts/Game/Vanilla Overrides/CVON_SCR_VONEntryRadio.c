@@ -22,11 +22,15 @@ modded class SCR_VONEntryRadio
 			SetChannelText("55500");
 			return;
 		}
-		SetUsable(m_RadioTransceiver.GetRadio().IsPowered());
-		
+		if (m_RadioTransceiver && m_RadioTransceiver.GetRadio())
+			SetUsable(m_RadioTransceiver.GetRadio().IsPowered());
+
 		AdjustEntryModif(0);
-				
-		SetChannelText(SCR_VONMenu.GetKnownChannel(m_RadioTransceiver.GetFrequency()));
+
+		//Update() fills the channel from the CVON radio (UpdateCVONRadioWidget). Vanilla's
+		//SCR_VONMenu.GetKnownChannel isn't needed and throws a null error on a dedicated server when the
+		//Game Master editor opens (it adds VON entries there too).
+		SetChannelText("");
 	}
 	//Ripped code straight from vanilla, just modified it so its a different look when you open the radial menu and so it supports our radios.
 	//==========================================================================================================================================================================

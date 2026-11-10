@@ -8,15 +8,6 @@ modded enum ChimeraMenuPreset
 	R187
 }
 
-//The different menus we can see on the screen.
-enum CVON_ERadioMenu
-{
-	FREQ,
-	VOL,
-	STEREO,
-	TIME
-}
-
 //What ear to hear the radio transmission in.
 enum CVON_EStereo
 {
@@ -25,642 +16,1392 @@ enum CVON_EStereo
 	LEFT
 }
 
+//Which screen the radio's display shows
+enum CVON_ERadioScreen
+{
+	HOME,		//preset, net name and frequency
+	ENTRY,		//typing a new frequency for the current preset (PGM, or CLR on the home screen)
+	OPTIONS,	//OPT menu, scrolling the list
+	EDIT		//OPT menu, changing one entry: ENT saves, CLR cancels
+}
+
+//The OPT menu's entries, in order
+enum CVON_ERadioOption
+{
+	VOLUME,
+	TX_POWER,		//transmit power LOW / MED / HIGH (CVON_RadioComponent.m_iTxPower)
+	EAR,
+	MONITOR,		//second channel heard at the same time (CVON_RadioComponent.m_iMonitorChannel)
+	MONITOR_EAR,	//...and its ear
+	LIGHT,			//display backlight
+	CLOCK			//radio clock offset (CVON_RadioComponent.m_iTimeDeviation, minutes)
+}
+
+//Bifrost VON radio keypad and display. The keys do what their labels say on the real radio:
+//- Harris radios (AN/PRC-152, -117, -150): PRE +/- step presets, VOL +/- volume, 7 OPT options menu,
+//  8 PGM program the preset's frequency, 2 LT backlight, 6 and 9 are the up and down arrows inside menus,
+//  CLR backs out without saving, ENT stores. The PRC-152 picture has no volume keys, so its left and right
+//  arrows set the volume on the home screen.
+//- R-168 and R-187: + / - (up and down arrows on the R-187) step channels, the side keys open the options,
+//  the red and green keys clear and store, digits type a frequency, the volume knob or side keys set volume.
+//Typing on the keyboard's number pad always enters a frequency, and Backspace works like CLR.
 class CVON_RadioMenu: MenuBase
 {
+	static const string KEY_CLICK = "{E6153160DA26A03A}UI/sounds/RadioKnobClick.wav";
+	static const float MESSAGE_TIME = 1.6;		//seconds a display message stays up
+	static const float FLASH_TIME = 0.12;		//seconds a pressed key stays darkened
+	static const float PENDING_TIME = 1.5;		//seconds a new preset/frequency is shown before the server confirms it
+	static const float BLINK_TIME = 0.4;		//edit cursor blink
+	static const int OPTION_COUNT = 7;
+	static const int CLOCK_LIMIT = 99;			//clock offset range, minutes either way
+	static const int LAST_CHANNEL = 99;
+	static const int BAR_COUNT = 5;				//signal bars on the display
+
+	//Light (the display, and the keypad on the Harris radios, which light together): OFF, AUTO or ON, one setting for
+	//every radio. AUTO is the Harris "momentary" light: on with any key press, off LIGHT_AUTO_TIME after the last one.
+	static const int LIGHT_OFF = 0;
+	static const int LIGHT_AUTO = 1;
+	static const int LIGHT_ON = 2;
+	static const float LIGHT_AUTO_TIME = 10;
+	static int s_iLight = LIGHT_OFF;
+	float m_fLightTimer;
+	ImageWidget m_wKeysLit;
+
 	Widget m_wRoot;
-	
-	//Used to store frequency when you are editing it
-	string m_sTempFrequency = "_____";
-	
-	//Same but with volume
-	string m_sTempVolume = "_";
-	
-	//Top Line, says "Frequency" in frequency menu
-	TextWidget m_wLine1;
-	
-	//Bottom Line, says the frequency in frequency menu
-	TextWidget m_wLine2;
-	
-	//Left most number, used in the time menu to show + or - time.
-	TextWidget m_wLine3;
-	
-	//Knob Image Widget
-	ImageWidget m_wKnobWidget;
-	
-	//Whats the current menu.
-	CVON_ERadioMenu m_ERadioMenu = CVON_ERadioMenu.FREQ;
-	
-	//Whats the next number we're inserting into the frequency
-	int m_iToInsert = -1;
-	
-	//Am I editing the frequency
-	bool m_bIsEditing = false;
-	
-	//The radio we used to open the menu from the radial von menu.
+
+	//The radio we used to open the menu from the radial von menu (set by CVON_RadioComponent).
 	IEntity m_RadioEntity;
-	
-	//Radio component from the above.
 	CVON_RadioComponent m_RadioComponent;
-	
-	//Store the pointer cause we need this alot
 	SCR_PlayerController m_PlayerController;
-	
-	//Used for exiting the menu
-	protected bool m_bFocused = true;
-	
-	//More pointers
 	InputManager m_InputManager;
-	
+	protected bool m_bFocused = true;
+
+	//Display: status line (left and right), net name line, big main line, info line (missing on small screens)
+	TextWidget m_wStatus;
+	TextWidget m_wStatusRight;
+	TextWidget m_wName;
+	TextWidget m_wMain;
+	TextWidget m_wInfo;
+	ImageWidget m_wGlow;
+	ImageWidget m_wKnobWidget;
+
+	//Function knob (PRC-117, PRC-150): turns to OFF, or to PT / CT to match the radio's crypto, like the real
+	//switch. The other radios swap their power picture instead (UpdateKnob).
+	ref CVON_RadioKnob m_FunctionKnob;
+	int m_iKnobOff;
+	int m_iKnobPlain;
+	int m_iKnobCipher;
+	bool m_bKnobAnimated;		//the knob picture is driven here, not swapped on / off by UpdateKnob
+	bool m_bKnobShownPower;		//power state the swapped picture shows
+
+	//AN/PRC-152 top function knob: a drum, OFF, presets 1-5, S (scan), F (front panel), Z (zeroise: pull-to-turn on
+	//the real radio, so a click never reaches it). One picture per position; turning steps through the ones in
+	//between, like the knob clicking past its detents.
+	static const int DRUM_OFF = 0;
+	static const int DRUM_SCAN = 6;
+	static const int DRUM_FRONT = 7;
+	static const int DRUM_PRESETS = 5;
+	static const float DRUM_STEP_TIME = 0.05;
+	static ref array<ResourceName> s_aDrumFrames = {
+		"{0F117ABDB255DE3D}UI/layouts/Radios/ANPRC152/data/ANPRC152Knob_OFF.edds",
+		"{3DB0A91F32090092}UI/layouts/Radios/ANPRC152/data/ANPRC152Knob_1.edds",
+		"{85085F2ED99A64EA}UI/layouts/Radios/ANPRC152/data/ANPRC152Knob_2.edds",
+		"{296D0022A71013D1}UI/layouts/Radios/ANPRC152/data/ANPRC152Knob_3.edds",
+		"{5C778A5C217CD5AF}UI/layouts/Radios/ANPRC152/data/ANPRC152Knob_4.edds",
+		"{665C94DD7ED81A96}UI/layouts/Radios/ANPRC152/data/ANPRC152Knob_5.edds",
+		"{6CC0EEA64E8DB18C}UI/layouts/Radios/ANPRC152/data/ANPRC152Knob_S.edds",
+		"{EE4C87B6AADB9B93}UI/layouts/Radios/ANPRC152/data/ANPRC152Knob_F.edds",
+		"{DCD526B23EF26E6F}UI/layouts/Radios/ANPRC152/data/ANPRC152Knob_Z.edds"
+	};
+	bool m_bDrum;
+	int m_iDrumTarget = -1;
+	int m_iDrumShown = -1;
+	float m_fDrumTimer;
+
+	//R-168: the channel lever (KANAL 1-7) and the volume knob's index turn with the radio; the mode key (RZh) has a
+	//light that shows while its menu is open
+	static const int R168_CHANNELS = 7;
+	ref CVON_RadioKnob m_ChannelKnob;
+	ref CVON_RadioKnob m_VolumeKnob;
+	Widget m_wModeLight;
+	Widget m_wMaskLight;		//TM, speech masking: lit while the radio is on crypto (CT)
+
+	//R-187: no power switch; holding the red key switches the radio on or off
+	static const float POWER_HOLD_TIME = 1.0;
+	ref CVON_HoldKeyHandler m_RedKey;
+	float m_fRedKeyHeld;
+	bool m_bRedKeyFired;
+	float m_fRedKeyBlock;		//swallows the click that ends a hold
+
+	//TX / RX marker and signal bars: lit bars use the display's ink, unlit ones a faint trace of it
+	TextWidget m_wLink;
+	ref array<ImageWidget> m_aBars = {};
+	ref Color m_BarLit;
+	ref Color m_BarDim;
+	SCR_VONController m_VONController;
+
 	Widget m_wHelpFrame;
 	SCR_ButtonComponent m_wHelpButton;
 	bool m_bHelpEnabled = false;
-	
+
+	//What the labelled keys do: Harris function keys, and whether the picture has volume keys
+	bool m_bHarrisKeys;
+	bool m_bVolumeKeys;
+
+	CVON_ERadioScreen m_eScreen = CVON_ERadioScreen.HOME;
+	CVON_ERadioOption m_eOption = CVON_ERadioOption.VOLUME;
+	int m_iEditValue;
+	string m_sEntry = "";
+
+	string m_sMessage = "";
+	float m_fMessageTimer;
+	float m_fBlinkTimer;
+
+	ButtonWidget m_wFlashed;
+	float m_fFlashTimer;
+
+	//Preset and frequency just chosen, shown until the server's copy catches up
+	int m_iPendingChannel = -1;
+	string m_sPendingFrequency = "";
+	float m_fPendingTimer;
+
 	//==========================================================================================================================================================================
 	override void OnMenuOpen()
 	{
 		m_wRoot = GetRootWidget();
-		
-		GetGame().GetInputManager().AddActionListener("Numpad1", EActionTrigger.DOWN, Button1);
-		GetGame().GetInputManager().AddActionListener("Numpad2", EActionTrigger.DOWN, Button2);
-		GetGame().GetInputManager().AddActionListener("Numpad3", EActionTrigger.DOWN, Button3);
-		GetGame().GetInputManager().AddActionListener("Numpad4", EActionTrigger.DOWN, Button4);
-		GetGame().GetInputManager().AddActionListener("Numpad5", EActionTrigger.DOWN, Button5);
-		GetGame().GetInputManager().AddActionListener("Numpad6", EActionTrigger.DOWN, Button6);
-		GetGame().GetInputManager().AddActionListener("Numpad7", EActionTrigger.DOWN, Button7);
-		GetGame().GetInputManager().AddActionListener("Numpad8", EActionTrigger.DOWN, Button8);
-		GetGame().GetInputManager().AddActionListener("Numpad9", EActionTrigger.DOWN, Button9);
-		GetGame().GetInputManager().AddActionListener("Numpad0", EActionTrigger.DOWN, Button0);
-		GetGame().GetInputManager().AddActionListener("Backspace", EActionTrigger.DOWN, Backspace);
-		GetGame().GetInputManager().AddActionListener("VONMenu", EActionTrigger.DOWN, Close);
-		
-		SCR_ButtonTextComponent.Cast(m_wRoot.FindWidget("Clear").FindHandler(SCR_ButtonTextComponent)).m_OnClicked.Insert(Clear);
-		SCR_ButtonTextComponent.Cast(m_wRoot.FindWidget("Enter").FindHandler(SCR_ButtonTextComponent)).m_OnClicked.Insert(Enter);
-		SCR_ButtonTextComponent.Cast(m_wRoot.FindWidget("Button0").FindHandler(SCR_ButtonTextComponent)).m_OnClicked.Insert(Button0);
-		SCR_ButtonTextComponent.Cast(m_wRoot.FindWidget("Button1").FindHandler(SCR_ButtonTextComponent)).m_OnClicked.Insert(Button1);
-		SCR_ButtonTextComponent.Cast(m_wRoot.FindWidget("Button2").FindHandler(SCR_ButtonTextComponent)).m_OnClicked.Insert(Button2);
-		SCR_ButtonTextComponent.Cast(m_wRoot.FindWidget("Button3").FindHandler(SCR_ButtonTextComponent)).m_OnClicked.Insert(Button3);
-		SCR_ButtonTextComponent.Cast(m_wRoot.FindWidget("Button4").FindHandler(SCR_ButtonTextComponent)).m_OnClicked.Insert(Button4);
-		SCR_ButtonTextComponent.Cast(m_wRoot.FindWidget("Button5").FindHandler(SCR_ButtonTextComponent)).m_OnClicked.Insert(Button5);
-		SCR_ButtonTextComponent.Cast(m_wRoot.FindWidget("Button6").FindHandler(SCR_ButtonTextComponent)).m_OnClicked.Insert(Button6);
-		SCR_ButtonTextComponent.Cast(m_wRoot.FindWidget("Button7").FindHandler(SCR_ButtonTextComponent)).m_OnClicked.Insert(Button7);
-		SCR_ButtonTextComponent.Cast(m_wRoot.FindWidget("Button8").FindHandler(SCR_ButtonTextComponent)).m_OnClicked.Insert(Button8);
-		SCR_ButtonTextComponent.Cast(m_wRoot.FindWidget("Button9").FindHandler(SCR_ButtonTextComponent)).m_OnClicked.Insert(Button9);
-		SCR_ButtonTextComponent.Cast(m_wRoot.FindWidget("MenuLeft").FindHandler(SCR_ButtonTextComponent)).m_OnClicked.Insert(MenuLeft);
-		SCR_ButtonTextComponent.Cast(m_wRoot.FindWidget("MenuRight").FindHandler(SCR_ButtonTextComponent)).m_OnClicked.Insert(MenuRight);
-		SCR_ButtonTextComponent.Cast(m_wRoot.FindWidget("MenuUp").FindHandler(SCR_ButtonTextComponent)).m_OnClicked.Insert(MenuUp);
-		SCR_ButtonTextComponent.Cast(m_wRoot.FindWidget("MenuDown").FindHandler(SCR_ButtonTextComponent)).m_OnClicked.Insert(MenuDown);
-		SCR_ButtonTextComponent.Cast(m_wRoot.FindWidget("Power").FindHandler(SCR_ButtonTextComponent)).m_OnClicked.Insert(TogglePower);
-		
-		m_wLine1 = TextWidget.Cast(m_wRoot.FindWidget("RadioText"));
-		m_wLine2 = TextWidget.Cast(m_wRoot.FindWidget("Frequency"));
-		m_wLine3 = TextWidget.Cast(m_wRoot.FindWidget("Line3"));
-		m_wLine3.SetVisible(false);
-		m_wKnobWidget = ImageWidget.Cast(m_wRoot.FindAnyWidget("Knob"));
-		
-		m_PlayerController = SCR_PlayerController.Cast(GetGame().GetPlayerController());
 		m_InputManager = GetGame().GetInputManager();
-		m_wHelpButton = SCR_ButtonComponent.Cast(m_wRoot.FindAnyWidget("HelpButton").FindHandler(SCR_ButtonComponent));
-		m_wHelpButton.m_OnClicked.Insert(ToggleHelp);
+		m_PlayerController = SCR_PlayerController.Cast(GetGame().GetPlayerController());
+
+		m_InputManager.AddActionListener("Numpad1", EActionTrigger.DOWN, Numpad1);
+		m_InputManager.AddActionListener("Numpad2", EActionTrigger.DOWN, Numpad2);
+		m_InputManager.AddActionListener("Numpad3", EActionTrigger.DOWN, Numpad3);
+		m_InputManager.AddActionListener("Numpad4", EActionTrigger.DOWN, Numpad4);
+		m_InputManager.AddActionListener("Numpad5", EActionTrigger.DOWN, Numpad5);
+		m_InputManager.AddActionListener("Numpad6", EActionTrigger.DOWN, Numpad6);
+		m_InputManager.AddActionListener("Numpad7", EActionTrigger.DOWN, Numpad7);
+		m_InputManager.AddActionListener("Numpad8", EActionTrigger.DOWN, Numpad8);
+		m_InputManager.AddActionListener("Numpad9", EActionTrigger.DOWN, Numpad9);
+		m_InputManager.AddActionListener("Numpad0", EActionTrigger.DOWN, Numpad0);
+		m_InputManager.AddActionListener("Backspace", EActionTrigger.DOWN, Backspace);
+		m_InputManager.AddActionListener("VONMenu", EActionTrigger.DOWN, Close);
+
+		array<string> keys = {"Button0", "Button1", "Button2", "Button3", "Button4", "Button5", "Button6", "Button7", "Button8", "Button9",
+			"Clear", "Enter", "MenuLeft", "MenuRight", "MenuUp", "MenuDown", "VolUp", "VolDown", "Power",
+			"KnobUp", "KnobDown", "ChannelUp", "ChannelDown", "ModeKey"};
+		foreach (string key: keys)
+		{
+			Widget keyWidget = m_wRoot.FindAnyWidget(key);
+			if (!keyWidget)
+				continue;
+			SCR_ButtonBaseComponent button = SCR_ButtonBaseComponent.Cast(keyWidget.FindHandler(SCR_ButtonBaseComponent));
+			if (button)
+				button.m_OnClicked.Insert(OnKeyClicked);
+		}
+		m_bVolumeKeys = m_wRoot.FindAnyWidget("VolUp") != null;
+
+		m_wStatus = TextWidget.Cast(m_wRoot.FindAnyWidget("LcdStatus"));
+		m_wStatusRight = TextWidget.Cast(m_wRoot.FindAnyWidget("LcdStatusRight"));
+		m_wName = TextWidget.Cast(m_wRoot.FindAnyWidget("LcdName"));
+		m_wMain = TextWidget.Cast(m_wRoot.FindAnyWidget("LcdMain"));
+		m_wInfo = TextWidget.Cast(m_wRoot.FindAnyWidget("LcdInfo"));
+		m_wGlow = ImageWidget.Cast(m_wRoot.FindAnyWidget("LcdGlow"));
+		m_wKnobWidget = ImageWidget.Cast(m_wRoot.FindAnyWidget("Knob"));
+		m_wKeysLit = ImageWidget.Cast(m_wRoot.FindAnyWidget("KeysLit"));
+		m_wModeLight = m_wRoot.FindAnyWidget("ModeLight");
+		m_wMaskLight = m_wRoot.FindAnyWidget("MaskLight");
+
+		m_wLink = TextWidget.Cast(m_wRoot.FindAnyWidget("LcdLink"));
+		for (int bar = 0; bar < BAR_COUNT; bar++)
+		{
+			ImageWidget barWidget = ImageWidget.Cast(m_wRoot.FindAnyWidget("LcdBar" + bar.ToString()));
+			if (barWidget)
+				m_aBars.Insert(barWidget);
+		}
+		if (!m_aBars.IsEmpty())
+		{
+			Color ink = m_aBars[0].GetColor();
+			m_BarLit = new Color(ink.R(), ink.G(), ink.B(), ink.A());
+			//Dark ink is an LCD, whose unlit segments stay faintly visible; bright ink is a glowing display
+			//(the R-168), where they almost vanish
+			float unlit = 0.14;
+			if (ink.R() + ink.G() + ink.B() > 1.5)
+				unlit = 0.06;
+			m_BarDim = new Color(ink.R(), ink.G(), ink.B(), ink.A() * unlit);
+		}
+		if (m_PlayerController)
+			m_VONController = SCR_VONController.Cast(m_PlayerController.FindComponent(SCR_VONController));
+
+		Widget helpButton = m_wRoot.FindAnyWidget("HelpButton");
+		if (helpButton)
+		{
+			m_wHelpButton = SCR_ButtonComponent.Cast(helpButton.FindHandler(SCR_ButtonComponent));
+			if (m_wHelpButton)
+				m_wHelpButton.m_OnClicked.Insert(ToggleHelp);
+		}
 		m_wHelpFrame = m_wRoot.FindAnyWidget("HelpFrame");
 	}
-	
+
 	void ToggleHelp()
 	{
 		m_bHelpEnabled = !m_bHelpEnabled;
 	}
-	
+
 	//==========================================================================================================================================================================
 	override void OnMenuClose()
 	{
-		GetGame().GetInputManager().RemoveActionListener("Numpad1", EActionTrigger.DOWN, Button1);
-		GetGame().GetInputManager().RemoveActionListener("Numpad2", EActionTrigger.DOWN, Button2);
-		GetGame().GetInputManager().RemoveActionListener("Numpad3", EActionTrigger.DOWN, Button3);
-		GetGame().GetInputManager().RemoveActionListener("Numpad4", EActionTrigger.DOWN, Button4);
-		GetGame().GetInputManager().RemoveActionListener("Numpad5", EActionTrigger.DOWN, Button5);
-		GetGame().GetInputManager().RemoveActionListener("Numpad6", EActionTrigger.DOWN, Button6);
-		GetGame().GetInputManager().RemoveActionListener("Numpad7", EActionTrigger.DOWN, Button7);
-		GetGame().GetInputManager().RemoveActionListener("Numpad8", EActionTrigger.DOWN, Button8);
-		GetGame().GetInputManager().RemoveActionListener("Numpad9", EActionTrigger.DOWN, Button9);
-		GetGame().GetInputManager().RemoveActionListener("Numpad0", EActionTrigger.DOWN, Button0);
-		GetGame().GetInputManager().RemoveActionListener("Backspace", EActionTrigger.DOWN, Backspace);
-		GetGame().GetInputManager().RemoveActionListener("VONMenu", EActionTrigger.DOWN, Close);
+		m_InputManager.RemoveActionListener("Numpad1", EActionTrigger.DOWN, Numpad1);
+		m_InputManager.RemoveActionListener("Numpad2", EActionTrigger.DOWN, Numpad2);
+		m_InputManager.RemoveActionListener("Numpad3", EActionTrigger.DOWN, Numpad3);
+		m_InputManager.RemoveActionListener("Numpad4", EActionTrigger.DOWN, Numpad4);
+		m_InputManager.RemoveActionListener("Numpad5", EActionTrigger.DOWN, Numpad5);
+		m_InputManager.RemoveActionListener("Numpad6", EActionTrigger.DOWN, Numpad6);
+		m_InputManager.RemoveActionListener("Numpad7", EActionTrigger.DOWN, Numpad7);
+		m_InputManager.RemoveActionListener("Numpad8", EActionTrigger.DOWN, Numpad8);
+		m_InputManager.RemoveActionListener("Numpad9", EActionTrigger.DOWN, Numpad9);
+		m_InputManager.RemoveActionListener("Numpad0", EActionTrigger.DOWN, Numpad0);
+		m_InputManager.RemoveActionListener("Backspace", EActionTrigger.DOWN, Backspace);
+		m_InputManager.RemoveActionListener("VONMenu", EActionTrigger.DOWN, Close);
 	}
-	
+
 	//==========================================================================================================================================================================
 	override void OnMenuUpdate(float tDelta)
 	{
-		if (m_bHelpEnabled)
-			m_wHelpFrame.SetVisible(true);
-		else
-			m_wHelpFrame.SetVisible(false);
-		//Initialize the radios channels
+		if (m_wHelpFrame)
+			m_wHelpFrame.SetVisible(m_bHelpEnabled);
+
 		if (!m_RadioComponent)
 		{
+			if (!m_RadioEntity)
+				return;
 			m_RadioComponent = CVON_RadioComponent.Cast(m_RadioEntity.FindComponent(CVON_RadioComponent));
-			if (m_RadioComponent.m_bPower)
-				PowerOn();
-			else
-				PowerOff();
+			if (!m_RadioComponent)
+				return;
+			m_bHarrisKeys = IsHarrisRadio(m_RadioComponent.m_eRadioMenu);
+			SetupKnobs();
+			UpdateKnob();
 		}
-			
-		//Update the time if its the time menu
-		if (m_ERadioMenu == CVON_ERadioMenu.TIME)
+
+		if (m_fMessageTimer > 0)
 		{
-			ChimeraWorld world = GetGame().GetWorld();
-			int h, m, s;
-			world.GetTimeAndWeatherManager().GetHoursMinutesSeconds(h, m, s);
-			if (m_RadioComponent.m_iTimeDeviation < 0)
-				m_wLine3.SetText(m_RadioComponent.m_iTimeDeviation.ToString());
-			else if (m_RadioComponent.m_iTimeDeviation >= 0)
-				m_wLine3.SetText("+" + m_RadioComponent.m_iTimeDeviation.ToString());
-			m_wLine2.SetText(((h * 60 * 60) + ((m + m_RadioComponent.m_iTimeDeviation) * 60) + s).ToString());
+			m_fMessageTimer -= tDelta;
+			if (m_fMessageTimer <= 0)
+				m_sMessage = "";
 		}
-	}	
-	//Shifts the menu down the enum
-	//==========================================================================================================================================================================
-	void MenuLeft()
-	{
-		if (!m_RadioComponent.m_bPower)
-			return;
-		
-		if (m_ERadioMenu == 0)
+
+		if (m_fFlashTimer > 0)
 		{
-			m_ERadioMenu = 3;
-			LoadNewMenu();
-			return;
+			m_fFlashTimer -= tDelta;
+			if (m_fFlashTimer <= 0)
+				EndFlash();
 		}
-		
-		m_ERadioMenu -= 1;
-		LoadNewMenu();
-	}
-	
-	//Shifts it up the enum
-	//==========================================================================================================================================================================
-	void MenuRight()
-	{
-		if (!m_RadioComponent.m_bPower)
-			return;
-		
-		if (m_ERadioMenu == 3)
+
+		if (m_fLightTimer > 0)
+			m_fLightTimer -= tDelta;
+		UpdateRedKey(tDelta);
+
+		if (m_fPendingTimer > 0)
 		{
-			m_ERadioMenu = 0;
-			LoadNewMenu();
-			return;
+			m_fPendingTimer -= tDelta;
+			bool caughtUp = m_RadioComponent.m_iCurrentChannel == m_iPendingChannel && m_RadioComponent.m_sFrequency == m_sPendingFrequency;
+			if (m_fPendingTimer <= 0 || caughtUp)
+				ClearPending();
 		}
-		
-		m_ERadioMenu += 1;
-		LoadNewMenu();
+
+		m_fBlinkTimer += tDelta;
+		if (m_fBlinkTimer >= BLINK_TIME * 2)
+			m_fBlinkTimer = 0;
+
+		RefreshDisplay();
+		SyncKnobs(tDelta);
 	}
-	
-	//Handles what to do per menu when using the up and down keys
+
+	static bool IsHarrisRadio(int menuPreset)
+	{
+		return menuPreset == ChimeraMenuPreset.ANPRC152 || menuPreset == ChimeraMenuPreset.ANPRC117 || menuPreset == ChimeraMenuPreset.ANPRC150;
+	}
+
+	//Keys
 	//==========================================================================================================================================================================
-	void MenuUp()
+	void OnKeyClicked(SCR_ButtonBaseComponent button)
 	{
-		if (!m_RadioComponent.m_bPower)
+		if (!button || !button.GetRootWidget())
 			return;
-		
-		switch (m_ERadioMenu)
-		{
-			case CVON_ERadioMenu.FREQ:
-			{
-				ChangeChannel(1);
-				break;
-			}
-			case CVON_ERadioMenu.VOL:
-			{
-				ChangeVolume(1);
-				break;
-			}
-			case CVON_ERadioMenu.STEREO:
-			{
-				ChangeStereo(1);
-				break;
-			}
-			case CVON_ERadioMenu.TIME:
-			{
-				m_RadioComponent.m_iTimeDeviation += 1;
-				m_RadioComponent.UpdateTimeDeviationClient(m_RadioComponent.m_iTimeDeviation);
-				break;
-			}
-		}
+		PressKey(button.GetRootWidget().GetName(), false);
 	}
-	
-	//Same as above
-	//==========================================================================================================================================================================
-	void MenuDown()
+
+	void Numpad0() { PressKey("Button0", true); }
+	void Numpad1() { PressKey("Button1", true); }
+	void Numpad2() { PressKey("Button2", true); }
+	void Numpad3() { PressKey("Button3", true); }
+	void Numpad4() { PressKey("Button4", true); }
+	void Numpad5() { PressKey("Button5", true); }
+	void Numpad6() { PressKey("Button6", true); }
+	void Numpad7() { PressKey("Button7", true); }
+	void Numpad8() { PressKey("Button8", true); }
+	void Numpad9() { PressKey("Button9", true); }
+	void Backspace() { PressKey("Clear", true); }
+
+	//"Button7" -> 7, anything else -> -1
+	static int DigitOfKey(string key)
 	{
-		if (!m_RadioComponent.m_bPower)
-			return;
-		
-		switch (m_ERadioMenu)
-		{
-			case CVON_ERadioMenu.FREQ:
-			{
-				ChangeChannel(-1);
-				break;
-			}
-			case CVON_ERadioMenu.VOL:
-			{
-				ChangeVolume(-1);
-				break;
-			}
-			case CVON_ERadioMenu.STEREO:
-			{
-				ChangeStereo(-1);
-				break;
-			}
-			case CVON_ERadioMenu.TIME:
-			{
-				m_RadioComponent.m_iTimeDeviation -= 1;
-				m_RadioComponent.UpdateTimeDeviationClient(m_RadioComponent.m_iTimeDeviation);
-				break;
-			}
-		}
+		if (key.Length() != 7 || key.IndexOf("Button") != 0)
+			return -1;
+		return key.Substring(6, 1).ToInt();
 	}
-	
-	void PowerOff()
+
+	//Every key press lands here. fromKeyboard: the number pad or Backspace rather than a click on the radio.
+	void PressKey(string key, bool fromKeyboard)
 	{
-		m_wLine1.SetVisible(false);
-		m_wLine2.SetVisible(false);
-		m_wLine3.SetVisible(false);
-		m_wKnobWidget.LoadImageTexture(1, m_RadioComponent.m_sDialOff);
-		m_wKnobWidget.SetImage(1);
-		m_bIsEditing = false;
-	}
-	
-	void PowerOn()
-	{
-		m_wLine1.SetVisible(true);
-		m_wLine2.SetVisible(true);
-		m_wLine3.SetVisible(true);
-		UpdateChannelMenu(0);
-		LoadFrequencyMenu(m_RadioComponent.m_iCurrentChannel);
-		m_wKnobWidget.LoadImageTexture(1, m_RadioComponent.m_sDialOn);
-		m_wKnobWidget.SetImage(1);
-		m_bIsEditing = false;
-	}
-	
-	void TogglePower()
-	{
-		m_RadioComponent.m_bPower = !m_RadioComponent.m_bPower;
-		#ifdef WORKBENCH
-		#else
-		m_RadioComponent.TogglePowerClient();
-		#endif
-		if (m_RadioComponent.m_bPower)
-			PowerOn();
-		else
-			PowerOff();
-		
-		AudioSystem.PlaySound("{E6153160DA26A03A}UI/sounds/RadioKnobClick.wav");
-	}
-	
-	//Changes the channel based on the input from the MenuUp and Down methods
-	//==========================================================================================================================================================================
-	void ChangeChannel(int input)
-	{
-		if (m_RadioComponent.m_iCurrentChannel == 1 && input == -1)
-			return;
-		else if (m_RadioComponent.m_iCurrentChannel == 99 && input == 1)
-		{
-			m_RadioComponent.UpdateChannelClient(1);
-			UpdateChannelMenu(9);
-			LoadFrequencyMenu(1);
-			return;
-		}
-		
-		UpdateChannelMenu(input);
-		//Have to compensate in multiplayer the delay between when we set the new channel on the server and it instantly happening on the client
-		#ifdef WORKBENCH
-		LoadFrequencyMenu(m_RadioComponent.m_iCurrentChannel);
-		#else
-		LoadFrequencyMenu(m_RadioComponent.m_iCurrentChannel + input);
-		#endif
-	}
-	
-	//Changes the stereo settings based on the input from the MenuUp and Down methods
-	//==========================================================================================================================================================================
-	void ChangeStereo(int input)
-	{
-		if (m_RadioComponent.m_eStereo == 0 && input == -1)
-		{
-			m_RadioComponent.m_eStereo = 2;
-			m_RadioComponent.WriteJSON(SCR_PlayerController.GetLocalControlledEntity());
-			LoadStereoMenu();
-			return;
-		}
-		else if (m_RadioComponent.m_eStereo == 2 && input == 1)
-		{
-			m_RadioComponent.m_eStereo = 0;
-			m_RadioComponent.WriteJSON(SCR_PlayerController.GetLocalControlledEntity());
-			LoadStereoMenu();
-			return;
-		}
-		
-		m_RadioComponent.m_eStereo += input;
-		m_RadioComponent.WriteJSON(SCR_PlayerController.GetLocalControlledEntity());
-		m_PlayerController.UpdateSettings();
-		LoadStereoMenu();
-	}
-	
-	//Changes the volume based on the input from the MenuUp and Down methods
-	//==========================================================================================================================================================================
-	void ChangeVolume(int input)
-	{
-		if (m_RadioComponent.m_iVolume == 0 && input == -1)
-		{
-			m_RadioComponent.m_iVolume = 9;
-			m_RadioComponent.WriteJSON(SCR_PlayerController.GetLocalControlledEntity());
-			LoadVolumeMenu();
-			return;
-		}
-		else if (m_RadioComponent.m_iVolume == 9 && input == 1)
-		{
-			m_RadioComponent.m_iVolume = 0;
-			m_RadioComponent.WriteJSON(SCR_PlayerController.GetLocalControlledEntity());
-			LoadVolumeMenu();
-			return;
-		}
-		
-		m_RadioComponent.m_iVolume += input;
-		m_RadioComponent.WriteJSON(SCR_PlayerController.GetLocalControlledEntity());
-		m_PlayerController.UpdateSettings();
-		LoadVolumeMenu();
-	}
-	
-	
-	//How we load a new menu, to make things simple
-	//==========================================================================================================================================================================
-	void LoadNewMenu()
-	{
-		switch (m_ERadioMenu)
-		{
-			case CVON_ERadioMenu.FREQ: {LoadFrequencyMenu(m_RadioComponent.m_iCurrentChannel); break;}
-			case CVON_ERadioMenu.VOL: {LoadVolumeMenu(); break;}
-			case CVON_ERadioMenu.STEREO: {LoadStereoMenu(); break;}
-			case CVON_ERadioMenu.TIME: {LoadTimeMenu(); break;}
-		}
-	}
-	
-	//Used when we need to shift to a new channel
-	//==========================================================================================================================================================================
-	void UpdateChannelMenu(int input)
-	{
-		int channels = m_RadioComponent.m_aChannels.Count();
-		if (channels < m_RadioComponent.m_iCurrentChannel + input)
-		{
-			m_RadioComponent.AddChannelClient();
-			m_RadioComponent.UpdateChannelClient(m_RadioComponent.m_iCurrentChannel + input);
-			m_RadioComponent.UpdateFrequencyClient("55500");
-		}
-		else
-		{
-			string freq = m_RadioComponent.m_aChannels.Get(m_RadioComponent.m_iCurrentChannel + input - 1);
-			m_RadioComponent.UpdateChannelClient(m_RadioComponent.m_iCurrentChannel + input);
-			m_RadioComponent.UpdateFrequencyClient(freq);
-		}
-	}
-	
-	//==========================================================================================================================================================================
-	void LoadFrequencyMenu(int channel)
-	{
-		m_wLine1.SetText("Frequency");
-		if(m_RadioComponent.m_aChannels.Count() < channel)
-			m_wLine2.SetText(PrepFinalFreq("55500", channel));
-		else
-			m_wLine2.SetText(PrepFinalFreq(m_RadioComponent.m_aChannels.Get(channel - 1), channel));
-		m_wLine3.SetVisible(false);
-	}
-	
-	//==========================================================================================================================================================================
-	void LoadVolumeMenu()
-	{
-		m_wLine1.SetText("Volume");
-		m_wLine2.SetText(m_RadioComponent.m_iVolume.ToString());
-		m_wLine3.SetVisible(false);
-	}
-	
-	//==========================================================================================================================================================================
-	void LoadStereoMenu()
-	{
-		m_wLine1.SetText("Stereo");
-		switch (m_RadioComponent.m_eStereo)
-		{
-			case CVON_EStereo.BOTH: {m_wLine2.SetText("Both"); break;}
-			case CVON_EStereo.RIGHT: {m_wLine2.SetText("Right"); break;}
-			case CVON_EStereo.LEFT: {m_wLine2.SetText("Left"); break;}
-		}
-		m_wLine3.SetVisible(false);
-		
-	}
-	
-	//==========================================================================================================================================================================
-	void LoadTimeMenu()
-	{
-		m_wLine1.SetText("Time");
-		m_wLine2.SetText("00:00");
-		m_wLine3.SetVisible(true);
-	}
-	
-	//Preps what the frequency looks like on the screen
-	//==========================================================================================================================================================================
-	string PrepFinalFreq(string input, int channel)
-	{
-		return "0" + channel.ToString() + ": " + input;
-	}
-	
-	//Used when we start editing
-	//==========================================================================================================================================================================
-	void Clear()
-	{
-		if (!m_RadioComponent.m_bPower)
-			return;
-		
-		if (m_ERadioMenu != CVON_ERadioMenu.FREQ)
-			return;
-		m_sTempFrequency = "_____";
-		m_wLine2.SetText(PrepFinalFreq(m_sTempFrequency, m_RadioComponent.m_iCurrentChannel));
-		m_bIsEditing = true;
-	}
-	
-	//Checks if the new freq is valid, if it is logs it and handles the networking
-	//==========================================================================================================================================================================
-	void Enter()
-	{
-		if (!m_RadioComponent.m_bPower)
-			return;
-		
-		if (m_ERadioMenu != CVON_ERadioMenu.FREQ)
-			return;
-		int tempFreq = m_sTempFrequency.ToInt();
-		if (tempFreq < 30000 || tempFreq > 87975 || tempFreq % 25 != 0)
-		{
-			m_wLine2.SetText(PrepFinalFreq(tempFreq.ToString(), m_RadioComponent.m_iCurrentChannel));
-			m_sTempFrequency = "_____";
-			return;
-		}
-		m_RadioComponent.UpdateFrequencyClient(tempFreq.ToString());
-		m_wLine2.SetText(PrepFinalFreq(tempFreq.ToString(), m_RadioComponent.m_iCurrentChannel));
-		m_sTempFrequency = "_____";
-		m_bIsEditing = false;
-	}
-	
-	//Used to update the frequency when another key is pressed
-	//==========================================================================================================================================================================
-	void UpdateScreen()
-	{
-		if (!m_sTempFrequency.Contains("_"))
-			return;
-		 
-		if (m_iToInsert == -1)
-			return;
-		
-		string newFreq = m_sTempFrequency + m_iToInsert.ToString();
-		m_iToInsert = -1;
-		newFreq = newFreq.Substring(1, 5);
-		m_sTempFrequency = newFreq;
-		m_wLine2.SetText(PrepFinalFreq(m_sTempFrequency, m_RadioComponent.m_iCurrentChannel));
-		m_bIsEditing = true;
-	}
-	
-	//Deletes a character on the screen when editing
-	//==========================================================================================================================================================================
-	void Backspace()
-	{
-		if (!m_RadioComponent.m_bPower)
-			return;
-		
-		if (!m_bIsEditing)
+		if (!m_RadioComponent)
 			return;
 
-		string newFreq = "_" + m_sTempFrequency;
-		newFreq = newFreq.Substring(0, 5);
-		m_sTempFrequency = newFreq;
-		m_wLine2.SetText(PrepFinalFreq(m_sTempFrequency, m_RadioComponent.m_iCurrentChannel));
+		Flash(key);
+		//The click that ends a held red key (R-187 power) does nothing else
+		if (key == "Clear" && (m_bRedKeyFired || m_fRedKeyBlock > 0))
+			return;
+		if (key == "Power")
+		{
+			TogglePower();
+			return;
+		}
+		if (key == "KnobUp" || key == "KnobDown")
+		{
+			if (key == "KnobUp")
+				TurnDrum(1);
+			else
+				TurnDrum(-1);
+			return;
+		}
+		if (!m_RadioComponent.m_bPower)
+			return;
+
+		//AUTO light: any key lights the display (and keypad) again
+		m_fLightTimer = LIGHT_AUTO_TIME;
+		AudioSystem.PlaySound(KEY_CLICK);
+		//The next key press clears a message (on small screens it covers the name line)
+		m_sMessage = "";
+		m_fMessageTimer = 0;
+
+		if (key == "VolUp" || key == "VolDown")
+		{
+			if (key == "VolUp")
+				StepVolume(1);
+			else
+				StepVolume(-1);
+			return;
+		}
+		if (key == "ChannelUp" || key == "ChannelDown")
+		{
+			if (key == "ChannelUp")
+				TurnChannel(1);
+			else
+				TurnChannel(-1);
+			RefreshDisplay();
+			return;
+		}
+		//R-168 mode key: opens the options, and closes them again
+		if (key == "ModeKey")
+		{
+			if (m_eScreen == CVON_ERadioScreen.OPTIONS || m_eScreen == CVON_ERadioScreen.EDIT)
+				m_eScreen = CVON_ERadioScreen.HOME;
+			else
+				OpenOptions();
+			RefreshDisplay();
+			return;
+		}
+
+		int digit = DigitOfKey(key);
+		switch (m_eScreen)
+		{
+			case CVON_ERadioScreen.HOME: {HomeKey(key, digit, fromKeyboard); break;}
+			case CVON_ERadioScreen.ENTRY: {EntryKey(key, digit); break;}
+			case CVON_ERadioScreen.OPTIONS: {OptionsKey(key, digit); break;}
+			case CVON_ERadioScreen.EDIT: {EditKey(key, digit); break;}
+		}
+		RefreshDisplay();
 	}
-	
-	//Im not marking all these below but it's how you type
+
+	//Home screen
 	//==========================================================================================================================================================================
-	void Button0()
+	void HomeKey(string key, int digit, bool fromKeyboard)
 	{
-		if (!m_RadioComponent.m_bPower)
+		if (key == "MenuUp")
+		{
+			StepPreset(1);
 			return;
-		
-		if (m_ERadioMenu != CVON_ERadioMenu.FREQ)
+		}
+		if (key == "MenuDown")
+		{
+			StepPreset(-1);
 			return;
-		
-		m_iToInsert = 0;
-		UpdateScreen();
+		}
+		if (key == "MenuLeft" || key == "MenuRight")
+		{
+			int direction = 1;
+			if (key == "MenuLeft")
+				direction = -1;
+			//No volume keys in the picture (PRC-152): the arrows set the volume
+			if (!m_bVolumeKeys)
+			{
+				StepVolume(direction);
+				return;
+			}
+			OpenOptions();
+			if (direction < 0)
+				m_eOption = OPTION_COUNT - 1;
+			return;
+		}
+		if (key == "Clear")
+		{
+			OpenEntry("");
+			return;
+		}
+		if (digit < 0)
+			return;
+
+		//Harris keypads: on the home screen the digit keys are their function labels
+		if (m_bHarrisKeys && !fromKeyboard)
+		{
+			switch (digit)
+			{
+				case 2:
+				{
+					//LT: light off, auto (momentary), on
+					s_iLight = (s_iLight + 1) % 3;
+					m_fLightTimer = LIGHT_AUTO_TIME;
+					ShowMessage("LIGHT " + LightText(s_iLight));
+					return;
+				}
+				case 7: {OpenOptions(); return;}
+				case 8: {OpenEntry(""); return;}
+			}
+			ShowMessage("NOT AVAILABLE");
+			return;
+		}
+		OpenEntry(digit.ToString());
 	}
-	
-	void Button1()
+
+	//Frequency entry
+	//==========================================================================================================================================================================
+	void OpenEntry(string firstDigit)
 	{
-		if (!m_RadioComponent.m_bPower)
-			return;
-		
-		if (m_ERadioMenu != CVON_ERadioMenu.FREQ)
-			return;
-		
-		m_iToInsert = 1;
-		UpdateScreen();
+		m_eScreen = CVON_ERadioScreen.ENTRY;
+		m_sEntry = firstDigit;
+		m_sMessage = "";
 	}
-	
-	void Button2()
+
+	int MaxDigits()
 	{
-		if (!m_RadioComponent.m_bPower)
-			return;
-		
-		if (m_ERadioMenu != CVON_ERadioMenu.FREQ)
-			return;
-		
-		m_iToInsert = 2;
-		UpdateScreen();
+		return Math.Max(m_RadioComponent.m_iMaxFrequency.ToString().Length(), 5);
 	}
-	
-	void Button3()
+
+	void EntryKey(string key, int digit)
 	{
-		if (!m_RadioComponent.m_bPower)
+		if (digit >= 0)
+		{
+			if (m_sEntry.Length() < MaxDigits())
+				m_sEntry += digit.ToString();
 			return;
-		
-		if (m_ERadioMenu != CVON_ERadioMenu.FREQ)
+		}
+		if (key == "Clear")
+		{
+			if (m_sEntry.IsEmpty())
+				m_eScreen = CVON_ERadioScreen.HOME;
+			else
+				m_sEntry = m_sEntry.Substring(0, m_sEntry.Length() - 1);
 			return;
-		
-		m_iToInsert = 3;
-		UpdateScreen();
+		}
+		if (key == "Enter")
+		{
+			StoreEntry();
+			return;
+		}
+		//PRE works from anywhere: leave the entry and change preset
+		if (key == "MenuUp" || key == "MenuDown")
+		{
+			m_eScreen = CVON_ERadioScreen.HOME;
+			if (key == "MenuUp")
+				StepPreset(1);
+			else
+				StepPreset(-1);
+		}
 	}
-	
-	void Button4()
+
+	void StoreEntry()
 	{
-		if (!m_RadioComponent.m_bPower)
+		int frequency = m_sEntry.ToInt();
+		if (m_sEntry.IsEmpty() || !m_RadioComponent.IsValidFrequency(frequency))
+		{
+			ShowMessage("INVALID FREQ");
+			m_sEntry = "";
 			return;
-		
-		if (m_ERadioMenu != CVON_ERadioMenu.FREQ)
-			return;
-		
-		m_iToInsert = 4;
-		UpdateScreen();
+		}
+		string text = frequency.ToString();
+		m_RadioComponent.UpdateFrequencyClient(text);
+		SetPending(ShownChannel(), text);
+		m_eScreen = CVON_ERadioScreen.HOME;
+		ShowMessage("STORED");
 	}
-	
-	void Button5()
+
+	//OPT menu
+	//==========================================================================================================================================================================
+	void OpenOptions()
 	{
-		if (!m_RadioComponent.m_bPower)
-			return;
-		
-		if (m_ERadioMenu != CVON_ERadioMenu.FREQ)
-			return;
-		
-		m_iToInsert = 5;
-		UpdateScreen();
+		m_eScreen = CVON_ERadioScreen.OPTIONS;
+		m_sMessage = "";
 	}
-	
-	void Button6()
+
+	//Up: PRE+ / up arrow / Harris 6. Down: PRE- / down arrow / Harris 9. Left and right arrows too.
+	int MenuDirection(string key, int digit)
 	{
-		if (!m_RadioComponent.m_bPower)
-			return;
-		
-		if (m_ERadioMenu != CVON_ERadioMenu.FREQ)
-			return;
-		
-		m_iToInsert = 6;
-		UpdateScreen();
+		if (key == "MenuUp" || key == "MenuRight" || (m_bHarrisKeys && digit == 6))
+			return 1;
+		if (key == "MenuDown" || key == "MenuLeft" || (m_bHarrisKeys && digit == 9))
+			return -1;
+		return 0;
 	}
-	
-	void Button7()
+
+	void OptionsKey(string key, int digit)
 	{
-		if (!m_RadioComponent.m_bPower)
+		if (key == "Clear")
+		{
+			m_eScreen = CVON_ERadioScreen.HOME;
 			return;
-		
-		if (m_ERadioMenu != CVON_ERadioMenu.FREQ)
+		}
+		if (key == "Enter")
+		{
+			m_iEditValue = OptionValue(m_eOption);
+			m_eScreen = CVON_ERadioScreen.EDIT;
+			m_fBlinkTimer = 0;
 			return;
-		
-		m_iToInsert = 7;
-		UpdateScreen();
+		}
+		int direction = MenuDirection(key, digit);
+		//Scrolling down the list goes to the next entry
+		if (key == "MenuUp" || key == "MenuDown" || (m_bHarrisKeys && (digit == 6 || digit == 9)))
+			direction = -direction;
+		if (direction == 0)
+			return;
+		int option = (m_eOption + direction) % OPTION_COUNT;
+		if (option < 0)
+			option += OPTION_COUNT;
+		m_eOption = option;
 	}
-	
-	void Button8()
+
+	void EditKey(string key, int digit)
 	{
-		if (!m_RadioComponent.m_bPower)
+		if (key == "Clear")
+		{
+			m_eScreen = CVON_ERadioScreen.OPTIONS;
 			return;
-		
-		if (m_ERadioMenu != CVON_ERadioMenu.FREQ)
+		}
+		if (key == "Enter")
+		{
+			ApplyOption(m_eOption, m_iEditValue);
+			m_eScreen = CVON_ERadioScreen.OPTIONS;
+			ShowMessage("SAVED");
 			return;
-		
-		m_iToInsert = 8;
-		UpdateScreen();
+		}
+		int direction = MenuDirection(key, digit);
+		if (direction != 0)
+		{
+			m_iEditValue = NextOptionValue(m_eOption, m_iEditValue, direction);
+			m_fBlinkTimer = 0;
+		}
 	}
-	
-	void Button9()
+
+	int OptionValue(CVON_ERadioOption option)
 	{
-		if (!m_RadioComponent.m_bPower)
-			return;
-		
-		if (m_ERadioMenu != CVON_ERadioMenu.FREQ)
-			return;
-		
-		m_iToInsert = 9;
-		UpdateScreen();
+		switch (option)
+		{
+			case CVON_ERadioOption.VOLUME: {return m_RadioComponent.m_iVolume;}
+			case CVON_ERadioOption.TX_POWER: {return m_RadioComponent.m_iTxPower;}
+			case CVON_ERadioOption.EAR: {return m_RadioComponent.m_eStereo;}
+			case CVON_ERadioOption.MONITOR: {return m_RadioComponent.m_iMonitorChannel;}
+			case CVON_ERadioOption.MONITOR_EAR: {return m_RadioComponent.m_eMonitorStereo;}
+			case CVON_ERadioOption.LIGHT: {return s_iLight;}
+			case CVON_ERadioOption.CLOCK: {return m_RadioComponent.m_iTimeDeviation;}
+		}
+		return 0;
 	}
-	
+
+	int NextOptionValue(CVON_ERadioOption option, int value, int direction)
+	{
+		switch (option)
+		{
+			case CVON_ERadioOption.VOLUME: {return Math.ClampInt(value + direction, 0, 9);}
+			case CVON_ERadioOption.TX_POWER: {return Math.ClampInt(value + direction, CVON_ETxPower.LOW, CVON_ETxPower.HIGH);}
+			case CVON_ERadioOption.EAR: {return NextStereo(value, direction);}
+			case CVON_ERadioOption.MONITOR: {return NextMonitorChannel(value, direction);}
+			case CVON_ERadioOption.MONITOR_EAR: {return NextStereo(value, direction);}
+			case CVON_ERadioOption.LIGHT: {return Math.ClampInt(value + direction, LIGHT_OFF, LIGHT_ON);}
+			case CVON_ERadioOption.CLOCK: {return Math.ClampInt(value + direction, -CLOCK_LIMIT, CLOCK_LIMIT);}
+		}
+		return value;
+	}
+
+	//Monitor: Off, then each channel except the one the radio is on
+	int NextMonitorChannel(int monitor, int direction)
+	{
+		int channelCount = m_RadioComponent.m_aChannels.Count();
+		if (channelCount < 2)
+			return 0;
+		for (int i = 0; i <= channelCount; i++)
+		{
+			monitor = (monitor + direction) % (channelCount + 1);
+			if (monitor < 0)
+				monitor += channelCount + 1;
+			if (monitor != ShownChannel())
+				break;
+		}
+		return monitor;
+	}
+
+	void ApplyOption(CVON_ERadioOption option, int value)
+	{
+		switch (option)
+		{
+			case CVON_ERadioOption.VOLUME: {SetVolume(value); return;}
+			case CVON_ERadioOption.TX_POWER: {m_RadioComponent.SetTxPowerClient(value); return;}
+			case CVON_ERadioOption.EAR:
+			{
+				m_RadioComponent.m_eStereo = value;
+				SaveSettings();
+				return;
+			}
+			case CVON_ERadioOption.MONITOR: {m_RadioComponent.SetMonitorChannelClient(value); return;}
+			case CVON_ERadioOption.MONITOR_EAR:
+			{
+				m_RadioComponent.m_eMonitorStereo = value;
+				SaveSettings();
+				return;
+			}
+			case CVON_ERadioOption.LIGHT:
+			{
+				s_iLight = value;
+				m_fLightTimer = LIGHT_AUTO_TIME;
+				return;
+			}
+			case CVON_ERadioOption.CLOCK:
+			{
+				m_RadioComponent.m_iTimeDeviation = value;
+				m_RadioComponent.UpdateTimeDeviationClient(value);
+				return;
+			}
+		}
+	}
+
+	static string OptionTitle(CVON_ERadioOption option)
+	{
+		switch (option)
+		{
+			case CVON_ERadioOption.VOLUME: {return "VOLUME";}
+			case CVON_ERadioOption.TX_POWER: {return "TX POWER";}
+			case CVON_ERadioOption.EAR: {return "EAR";}
+			case CVON_ERadioOption.MONITOR: {return "MONITOR";}
+			case CVON_ERadioOption.MONITOR_EAR: {return "MONITOR EAR";}
+			case CVON_ERadioOption.LIGHT: {return "LIGHT";}
+			case CVON_ERadioOption.CLOCK: {return "CLOCK";}
+		}
+		return "";
+	}
+
+	string OptionText(CVON_ERadioOption option, int value)
+	{
+		switch (option)
+		{
+			case CVON_ERadioOption.VOLUME: {return value.ToString();}
+			case CVON_ERadioOption.TX_POWER: {return CVON_RadioComponent.TxPowerText(value) + " " + RangeText(PowerRange(value));}
+			case CVON_ERadioOption.EAR: {return EarText(value);}
+			case CVON_ERadioOption.MONITOR:
+			{
+				if (value < 1 || value > m_RadioComponent.m_aChannels.Count())
+					return "OFF";
+				return "P" + PadChannel(value) + " " + FormatFrequency(m_RadioComponent.m_aChannels.Get(value - 1));
+			}
+			case CVON_ERadioOption.MONITOR_EAR: {return EarText(value);}
+			case CVON_ERadioOption.LIGHT: {return LightText(value);}
+			case CVON_ERadioOption.CLOCK: {return ClockText(value);}
+		}
+		return "";
+	}
+
+	//Metres the radio would reach on this power setting
+	float PowerRange(int power)
+	{
+		switch (power)
+		{
+			case CVON_ETxPower.LOW: {return m_RadioComponent.m_iRadioRange * m_RadioComponent.m_fLowPowerRange;}
+			case CVON_ETxPower.MEDIUM: {return m_RadioComponent.m_iRadioRange * m_RadioComponent.m_fMediumPowerRange;}
+		}
+		return m_RadioComponent.m_iRadioRange;
+	}
+
+	//1250 -> "1.3KM", 15000 -> "15KM"
+	static string RangeText(float metres)
+	{
+		int tenths = Math.Round(metres / 100);
+		int whole = tenths / 10;
+		if (tenths >= 100)
+			return whole.ToString() + "KM";
+		int fraction = tenths % 10;
+		return whole.ToString() + "." + fraction.ToString() + "KM";
+	}
+
+	//"L", "M" or "H", as the Harris displays show the power setting
+	static string PowerLetter(int power)
+	{
+		switch (power)
+		{
+			case CVON_ETxPower.LOW: {return "L";}
+			case CVON_ETxPower.MEDIUM: {return "M";}
+		}
+		return "H";
+	}
+
+	//Radio time with an offset in minutes, HH:MM
+	static string ClockText(int offsetMinutes)
+	{
+		ChimeraWorld world = GetGame().GetWorld();
+		if (!world || !world.GetTimeAndWeatherManager())
+			return "--:--";
+		int h, m, s;
+		world.GetTimeAndWeatherManager().GetHoursMinutesSeconds(h, m, s);
+		int minutes = (h * 60 + m + offsetMinutes) % 1440;
+		if (minutes < 0)
+			minutes += 1440;
+		return PadChannel(minutes / 60) + ":" + PadChannel(minutes % 60);
+	}
+
+	//Presets, volume, settings
+	//==========================================================================================================================================================================
+	int ShownChannel()
+	{
+		if (m_iPendingChannel > 0)
+			return m_iPendingChannel;
+		return m_RadioComponent.m_iCurrentChannel;
+	}
+
+	string ShownFrequency()
+	{
+		if (m_sPendingFrequency != "")
+			return m_sPendingFrequency;
+		int channel = ShownChannel();
+		if (channel == m_RadioComponent.m_iCurrentChannel)
+			return m_RadioComponent.m_sFrequency;
+		if (channel >= 1 && channel <= m_RadioComponent.m_aChannels.Count())
+			return m_RadioComponent.m_aChannels.Get(channel - 1);
+		return "55500";
+	}
+
+	void SetPending(int channel, string frequency)
+	{
+		m_iPendingChannel = channel;
+		m_sPendingFrequency = frequency;
+		m_fPendingTimer = PENDING_TIME;
+	}
+
+	void ClearPending()
+	{
+		m_iPendingChannel = -1;
+		m_sPendingFrequency = "";
+		m_fPendingTimer = 0;
+	}
+
+	//PRE +/-: the next preset; stepping past the last one makes a new one (up to 99), PRE- from 1 wraps to the last
+	void StepPreset(int direction)
+	{
+		int channelCount = m_RadioComponent.m_aChannels.Count();
+		int next = ShownChannel() + direction;
+		if (next > LAST_CHANNEL)
+			next = 1;
+		if (next < 1)
+			next = Math.Max(channelCount, 1);
+		GoToPreset(next);
+	}
+
+	//Switch to a preset; past the last one makes a new one (as PRE+ always did)
+	void GoToPreset(int next)
+	{
+		int channelCount = m_RadioComponent.m_aChannels.Count();
+		string frequency;
+		if (next > channelCount)
+		{
+			//A new preset already asked for and not back from the server yet: a second quick press would make
+			//another blank one
+			if (m_iPendingChannel > channelCount)
+				return;
+			m_RadioComponent.AddChannelClient();
+			frequency = "55500";
+			next = channelCount + 1;
+		}
+		else
+			frequency = m_RadioComponent.m_aChannels.Get(next - 1);
+
+		m_RadioComponent.UpdateChannelClient(next);
+		m_RadioComponent.UpdateFrequencyClient(frequency);
+		SetPending(next, frequency);
+		//A monitor on the channel we just moved to would hear the same net twice
+		if (m_RadioComponent.m_iMonitorChannel == next)
+			m_RadioComponent.SetMonitorChannelClient(0);
+	}
+
+	void StepVolume(int direction)
+	{
+		SetVolume(Math.ClampInt(m_RadioComponent.m_iVolume + direction, 0, 9));
+		ShowMessage("VOLUME " + m_RadioComponent.m_iVolume.ToString());
+	}
+
+	void SetVolume(int volume)
+	{
+		m_RadioComponent.m_iVolume = volume;
+		SaveSettings();
+	}
+
+	void SaveSettings()
+	{
+		m_RadioComponent.WriteJSON(SCR_PlayerController.GetLocalControlledEntity());
+		if (m_PlayerController)
+			m_PlayerController.UpdateSettings();
+	}
+
+	void ShowMessage(string message)
+	{
+		m_sMessage = message;
+		m_fMessageTimer = MESSAGE_TIME;
+	}
+
+	//Power
+	//==========================================================================================================================================================================
+	void TogglePower()
+	{
+		#ifdef WORKBENCH
+		m_RadioComponent.m_bPower = !m_RadioComponent.m_bPower;
+		#else
+		//A client shows the change at once and the server's copy, flipped by the request, replicates back the same
+		//value. On a hosting player's machine the request flips it directly, so flipping here as well (as the
+		//original did) cancelled the switch out.
+		if (!Replication.IsServer())
+			m_RadioComponent.m_bPower = !m_RadioComponent.m_bPower;
+		m_RadioComponent.TogglePowerClient();
+		#endif
+		m_eScreen = CVON_ERadioScreen.HOME;
+		m_sMessage = "";
+		//Switching on lights an AUTO light, like any key
+		m_fLightTimer = LIGHT_AUTO_TIME;
+		UpdateKnob();
+		RefreshDisplay();
+		AudioSystem.PlaySound(KEY_CLICK);
+	}
+
+	//Knobs drawn as their own picture, with the pointer angle of each position read off the markings printed
+	//around them on the radio (positions in the order printed). The picture is the radio's "on" knob art.
+	void SetupKnobs()
+	{
+		switch (m_RadioComponent.m_eRadioMenu)
+		{
+			case ChimeraMenuPreset.ANPRC152:
+			{
+				if (!m_wKnobWidget)
+					break;
+				m_bDrum = true;
+				m_bKnobAnimated = true;
+				if (m_RadioComponent.m_bPower)
+					m_iDrumTarget = DrumForChannel(ShownChannel());
+				else
+					m_iDrumTarget = DRUM_OFF;
+				break;
+			}
+			case ChimeraMenuPreset.R168:
+			{
+				ImageWidget lever = ImageWidget.Cast(m_wRoot.FindAnyWidget("ChannelKnob"));
+				if (lever)
+				{
+					//KANAL 1-7: pointer angles of the dots printed beside each number
+					array<float> channels168 = {220.7, 188.5, 156.1, 117.4, 72.3, 28.3, -9.2};
+					m_ChannelKnob = new CVON_RadioKnob(lever, 0.5, 0.5, -24.5, channels168);
+					m_ChannelKnob.SetShadow(ImageWidget.Cast(m_wRoot.FindAnyWidget("ChannelShadow")), 0.5, 0.5);
+				}
+				ImageWidget index = ImageWidget.Cast(m_wRoot.FindAnyWidget("VolumeIndex"));
+				if (index)
+				{
+					//Volume 0-9: from the 0 mark clockwise round to the end mark (the dots printed beside the knob)
+					array<float> volumes168 = {};
+					for (int v = 0; v <= 9; v++)
+					{
+						volumes168.Insert(-8.3 - v * 307.1 / 9);
+					}
+					m_VolumeKnob = new CVON_RadioKnob(index, 0.5, 0.5, 0, volumes168);
+				}
+				break;
+			}
+			case ChimeraMenuPreset.R187:
+			{
+				Widget redKey = m_wRoot.FindAnyWidget("Clear");
+				if (redKey)
+				{
+					m_RedKey = new CVON_HoldKeyHandler();
+					redKey.AddHandler(m_RedKey);
+				}
+				break;
+			}
+		}
+		if (!m_wKnobWidget)
+			return;
+		switch (m_RadioComponent.m_eRadioMenu)
+		{
+			case ChimeraMenuPreset.ANPRC117:
+			{
+				//OFF, CT, PT, LD, Z
+				array<float> detents117 = {69.0, 28.5, 4.0, -25.0, -55.0};
+				m_FunctionKnob = new CVON_RadioKnob(m_wKnobWidget, 1938 / 2560.0, 502 / 1440.0, 30.2, detents117);
+				m_iKnobOff = 0;
+				m_iKnobCipher = 1;
+				m_iKnobPlain = 2;
+				break;
+			}
+			case ChimeraMenuPreset.ANPRC150:
+			{
+				//OFF, PT, CC, CT, RV, LD, Z
+				array<float> detents150 = {136.0, 89.0, 45.0, 17.0, -6.0, -38.0, -89.0};
+				m_FunctionKnob = new CVON_RadioKnob(m_wKnobWidget, 1462.5 / 2560.0, 828.5 / 1440.0, 16.6, detents150);
+				m_iKnobOff = 0;
+				m_iKnobPlain = 1;
+				m_iKnobCipher = 3;
+				break;
+			}
+		}
+		if (!m_FunctionKnob)
+			return;
+		m_bKnobAnimated = true;
+		m_wKnobWidget.LoadImageTexture(1, m_RadioComponent.m_sDialOn);
+		m_wKnobWidget.SetImage(1);
+	}
+
+	//Every frame: knobs follow the radio (power, crypto, preset, volume) and ease into place
+	void SyncKnobs(float tDelta)
+	{
+		if (m_FunctionKnob)
+		{
+			int detent = m_iKnobOff;
+			if (m_RadioComponent.m_bPower)
+			{
+				if (CryptoText() == "CT")
+					detent = m_iKnobCipher;
+				else
+					detent = m_iKnobPlain;
+			}
+			m_FunctionKnob.SetDetent(detent);
+			m_FunctionKnob.Update(tDelta);
+		}
+		if (m_bDrum)
+			SyncDrum(tDelta);
+		if (m_ChannelKnob)
+		{
+			m_ChannelKnob.SetDetent(Math.ClampInt(ShownChannel(), 1, R168_CHANNELS) - 1);
+			m_ChannelKnob.Update(tDelta);
+		}
+		if (m_VolumeKnob)
+		{
+			m_VolumeKnob.SetDetent(m_RadioComponent.m_iVolume);
+			m_VolumeKnob.Update(tDelta);
+		}
+		//Power pictures (the R-168's toggle) follow the radio however it was switched
+		if (m_RadioComponent.m_bPower != m_bKnobShownPower)
+			UpdateKnob();
+	}
+
+	//PRC-152 drum position for a preset: 1-5 on the knob, any other preset is chosen on the front panel (F)
+	static int DrumForChannel(int channel)
+	{
+		if (channel >= 1 && channel <= DRUM_PRESETS)
+			return channel;
+		return DRUM_FRONT;
+	}
+
+	//Turning the PRC-152 knob one position (click on its left or right half). OFF switches off, any other position
+	//switches on; 1-5 select that preset, S (scan) isn't available in VON, F hands presets to the keypad.
+	void TurnDrum(int direction)
+	{
+		if (!m_bDrum)
+			return;
+		int next = Math.ClampInt(m_iDrumTarget + direction, DRUM_OFF, DRUM_FRONT);
+		if (next == m_iDrumTarget)
+			return;
+		m_iDrumTarget = next;
+		bool on = m_RadioComponent.m_bPower;
+		if (next == DRUM_OFF)
+		{
+			if (on)
+				TogglePower();
+			return;
+		}
+		if (!on)
+			TogglePower();
+		else
+			AudioSystem.PlaySound(KEY_CLICK);
+		m_fLightTimer = LIGHT_AUTO_TIME;
+		if (next <= DRUM_PRESETS)
+			GoToPreset(next);
+		else if (next == DRUM_SCAN)
+			ShowMessage("SCAN N/A");
+		else
+			ShowMessage("FRONT PANEL");
+		RefreshDisplay();
+	}
+
+	void SyncDrum(float tDelta)
+	{
+		int target = m_iDrumTarget;
+		int channel = ShownChannel();
+		if (!m_RadioComponent.m_bPower)
+			target = DRUM_OFF;
+		else if (target == DRUM_OFF)
+			target = DrumForChannel(channel);
+		//On a preset position the knob is the preset: PRE keys moving to another preset turn it too
+		else if (target >= 1 && target <= DRUM_PRESETS && target != channel)
+			target = DrumForChannel(channel);
+		m_iDrumTarget = target;
+		if (m_iDrumShown == m_iDrumTarget)
+			return;
+		if (m_iDrumShown >= 0)
+		{
+			m_fDrumTimer -= tDelta;
+			if (m_fDrumTimer > 0)
+				return;
+			if (m_iDrumShown < m_iDrumTarget)
+				m_iDrumShown++;
+			else
+				m_iDrumShown--;
+		}
+		else
+			m_iDrumShown = m_iDrumTarget;
+		m_wKnobWidget.LoadImageTexture(0, s_aDrumFrames[m_iDrumShown]);
+		m_wKnobWidget.SetImage(0);
+		m_fDrumTimer = DRUM_STEP_TIME;
+	}
+
+	//R-168 channel lever: one channel either way, 1 to 7
+	void TurnChannel(int direction)
+	{
+		int next = Math.ClampInt(ShownChannel() + direction, 1, R168_CHANNELS);
+		if (next == ShownChannel())
+			return;
+		GoToPreset(next);
+	}
+
+	//R-187: the red key held for POWER_HOLD_TIME switches the radio on or off
+	void UpdateRedKey(float tDelta)
+	{
+		if (m_fRedKeyBlock > 0)
+			m_fRedKeyBlock -= tDelta;
+		if (!m_RedKey || !m_RadioComponent)
+			return;
+		if (!m_RedKey.m_bDown)
+		{
+			m_fRedKeyHeld = 0;
+			if (m_bRedKeyFired)
+			{
+				m_bRedKeyFired = false;
+				m_fRedKeyBlock = 0.3;
+			}
+			return;
+		}
+		m_fRedKeyHeld += tDelta;
+		if (m_fRedKeyHeld >= POWER_HOLD_TIME && !m_bRedKeyFired)
+		{
+			m_bRedKeyFired = true;
+			TogglePower();
+		}
+	}
+
+	static string LightText(int light)
+	{
+		switch (light)
+		{
+			case LIGHT_AUTO: {return "AUTO";}
+			case LIGHT_ON: {return "ON";}
+		}
+		return "OFF";
+	}
+
+	bool IsLit()
+	{
+		if (!m_RadioComponent || !m_RadioComponent.m_bPower)
+			return false;
+		if (s_iLight == LIGHT_ON)
+			return true;
+		return s_iLight == LIGHT_AUTO && m_fLightTimer > 0;
+	}
+
+	void UpdateKnob()
+	{
+		m_bKnobShownPower = m_RadioComponent.m_bPower;
+		if (!m_wKnobWidget || m_bKnobAnimated)
+			return;
+		if (m_RadioComponent.m_bPower)
+			m_wKnobWidget.LoadImageTexture(1, m_RadioComponent.m_sDialOn);
+		else
+			m_wKnobWidget.LoadImageTexture(1, m_RadioComponent.m_sDialOff);
+		m_wKnobWidget.SetImage(1);
+	}
+
+	//Pressed key: darkened for a moment
+	//==========================================================================================================================================================================
+	void Flash(string key)
+	{
+		EndFlash();
+		m_wFlashed = ButtonWidget.Cast(m_wRoot.FindAnyWidget(key));
+		if (!m_wFlashed)
+			return;
+		m_wFlashed.SetColor(Color.FromRGBA(0, 0, 0, 110));
+		m_fFlashTimer = FLASH_TIME;
+	}
+
+	void EndFlash()
+	{
+		if (m_wFlashed)
+			m_wFlashed.SetColor(Color.FromRGBA(255, 255, 255, 0));
+		m_wFlashed = null;
+		m_fFlashTimer = 0;
+	}
+
+	//Display
+	//==========================================================================================================================================================================
+	void RefreshDisplay()
+	{
+		if (!m_RadioComponent)
+			return;
+
+		bool on = m_RadioComponent.m_bPower;
+		bool lit = IsLit();
+		if (m_wGlow)
+			m_wGlow.SetVisible(lit);
+		if (m_wKeysLit)
+			m_wKeysLit.SetVisible(lit);
+		if (m_wModeLight)
+			m_wModeLight.SetVisible(on && (m_eScreen == CVON_ERadioScreen.OPTIONS || m_eScreen == CVON_ERadioScreen.EDIT));
+		if (m_wMaskLight)
+			m_wMaskLight.SetVisible(on && CryptoText() == "CT");
+		SetLine(m_wStatus, on, "");
+		SetLine(m_wStatusRight, on, "");
+		SetLine(m_wName, on, "");
+		SetLine(m_wMain, on, "");
+		SetLine(m_wInfo, on, "");
+		if (!on)
+		{
+			RefreshLink(false);
+			return;
+		}
+
+		string status, statusRight, name, mainText, info;
+		switch (m_eScreen)
+		{
+			case CVON_ERadioScreen.HOME:
+			{
+				int channel = ShownChannel();
+				string frequency = ShownFrequency();
+				status = "P" + PadChannel(channel) + "  " + CryptoText() + "  " + PowerLetter(m_RadioComponent.m_iTxPower);
+				statusRight = "VOL " + m_RadioComponent.m_iVolume.ToString();
+				name = m_RadioComponent.GetChannelLabel(frequency);
+				if (name == "")
+					name = "PRESET " + PadChannel(channel);
+				mainText = FormatFrequency(frequency);
+				string monitor = m_RadioComponent.GetMonitorFrequency();
+				if (monitor != "")
+					info = "MON P" + PadChannel(m_RadioComponent.m_iMonitorChannel) + " " + FormatFrequency(monitor) + " " + EarLetter(m_RadioComponent.m_eMonitorStereo);
+				else
+					info = "EAR " + EarText(m_RadioComponent.m_eStereo);
+				break;
+			}
+			case CVON_ERadioScreen.ENTRY:
+			{
+				status = "PGM P" + PadChannel(ShownChannel());
+				name = "ENTER FREQ";
+				mainText = FormatFrequency(EntryMask());
+				info = "ENT STORE  CLR DEL";
+				break;
+			}
+			case CVON_ERadioScreen.OPTIONS:
+			{
+				status = OptionsStatus();
+				name = OptionTitle(m_eOption);
+				mainText = OptionText(m_eOption, OptionValue(m_eOption));
+				info = "ENT EDIT  CLR EXIT";
+				break;
+			}
+			case CVON_ERadioScreen.EDIT:
+			{
+				status = OptionsStatus();
+				statusRight = "EDIT";
+				name = OptionTitle(m_eOption);
+				//The value being changed blinks, like the real radio's edit field
+				if (m_fBlinkTimer < BLINK_TIME)
+					mainText = OptionText(m_eOption, m_iEditValue);
+				info = "ENT SAVE  CLR CANCEL";
+				break;
+			}
+		}
+
+		//Messages take the info line, or the name line on screens too small for one
+		if (m_sMessage != "")
+		{
+			if (m_wInfo)
+				info = m_sMessage;
+			else
+				name = m_sMessage;
+		}
+
+		SetLine(m_wStatus, true, status);
+		SetLine(m_wStatusRight, true, statusRight);
+		SetLine(m_wName, true, name);
+		SetLine(m_wMain, true, mainText);
+		SetLine(m_wInfo, true, info);
+		RefreshLink(true);
+	}
+
+	//T while this radio transmits (bars = power setting), R while it hears a call (bars = signal strength)
+	void RefreshLink(bool on)
+	{
+		bool transmitting;
+		float quality;
+		bool active = on && m_VONController && m_VONController.GetRadioLink(m_RadioComponent, transmitting, quality);
+		string marker = "";
+		int lit = 0;
+		if (active)
+		{
+			if (transmitting)
+			{
+				marker = "T";
+				lit = TxPowerBars(m_RadioComponent.m_iTxPower);
+			}
+			else
+			{
+				marker = "R";
+				lit = SignalBars(quality);
+			}
+		}
+		SetLine(m_wLink, on, marker);
+		for (int bar = 0; bar < m_aBars.Count(); bar++)
+		{
+			m_aBars[bar].SetVisible(on);
+			if (bar < lit)
+				m_aBars[bar].SetColor(m_BarLit);
+			else
+				m_aBars[bar].SetColor(m_BarDim);
+		}
+	}
+
+	//Signal strength 0..1 -> lit bars (any signal at all lights one)
+	static int SignalBars(float quality)
+	{
+		if (quality <= 0)
+			return 0;
+		int bars = Math.Ceil(quality * BAR_COUNT);
+		return Math.ClampInt(bars, 1, BAR_COUNT);
+	}
+
+	//While transmitting the bars show the power setting
+	static int TxPowerBars(int power)
+	{
+		switch (power)
+		{
+			case CVON_ETxPower.LOW: {return 2;}
+			case CVON_ETxPower.MEDIUM: {return 3;}
+		}
+		return BAR_COUNT;
+	}
+
+	//"OPT 2/6"
+	string OptionsStatus()
+	{
+		int number = m_eOption + 1;
+		int count = OPTION_COUNT;
+		return "OPT " + number.ToString() + "/" + count.ToString();
+	}
+
+	static void SetLine(TextWidget line, bool visible, string text)
+	{
+		if (!line)
+			return;
+		line.SetVisible(visible);
+		line.SetText(text);
+	}
+
+	//Digits typed so far, padded with underscores to a full frequency
+	string EntryMask()
+	{
+		string mask = m_sEntry;
+		while (mask.Length() < MaxDigits())
+			mask += "_";
+		return mask;
+	}
+
+	//CT when the radio holds a crypto key (faction encryption on), PT (plain text) otherwise
+	string CryptoText()
+	{
+		SCR_BaseGameMode gamemode = SCR_BaseGameMode.Cast(GetGame().GetGameMode());
+		if (gamemode && gamemode.IsEncryptionEnabled() && m_RadioComponent.m_sFactionKey != "")
+			return "CT";
+		return "PT";
+	}
+
+	//"31120" (kHz) -> "31.120" (MHz), the way the radios show it
+	static string FormatFrequency(string frequency)
+	{
+		int length = frequency.Length();
+		if (length < 4)
+			return frequency;
+		return frequency.Substring(0, length - 3) + "." + frequency.Substring(length - 3, 3);
+	}
+
+	static string PadChannel(int channel)
+	{
+		if (channel >= 0 && channel < 10)
+			return "0" + channel.ToString();
+		return channel.ToString();
+	}
+
+	static string EarLetter(CVON_EStereo stereo)
+	{
+		switch (stereo)
+		{
+			case CVON_EStereo.RIGHT: {return "R";}
+			case CVON_EStereo.LEFT: {return "L";}
+		}
+		return "LR";
+	}
+
+	//Both, Right, Left, round and round.
+	static CVON_EStereo NextStereo(CVON_EStereo current, int input)
+	{
+		int next = (current + input) % 3;
+		if (next < 0)
+			next += 3;
+		return next;
+	}
+
+	//The ear as the display shows it
+	static string EarText(CVON_EStereo stereo)
+	{
+		switch (stereo)
+		{
+			case CVON_EStereo.RIGHT: {return "RIGHT";}
+			case CVON_EStereo.LEFT: {return "LEFT";}
+		}
+		return "BOTH";
+	}
+
+	static string StereoText(CVON_EStereo stereo)
+	{
+		switch (stereo)
+		{
+			case CVON_EStereo.RIGHT: {return "Right";}
+			case CVON_EStereo.LEFT: {return "Left";}
+		}
+		return "Both";
+	}
+
+	//==========================================================================================================================================================================
 	override void OnMenuFocusLost()
 	{
 		m_bFocused = false;
@@ -670,7 +1411,7 @@ class CVON_RadioMenu: MenuBase
 		#endif
 	}
 
-	//---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+	//==========================================================================================================================================================================
 	override void OnMenuFocusGained()
 	{
 		m_bFocused = true;

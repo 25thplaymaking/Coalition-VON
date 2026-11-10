@@ -1,3 +1,28 @@
+# Bifrost VON
+
+TeamSpeak radio for Arma Reforger: radios with working keypads, knobs and lights, TX power, signal bars,
+a monitor channel, terrain effects and more. Source code for the mod and its TeamSpeak plugin.
+
+**Bifrost VON is built on [Coalition VON](https://github.com/CoalitionArma/Coalition-VON) by CoalitionArma.**
+They wrote the radio system and the TeamSpeak plugin and released it as open source; this fork adds to their
+work under the Arma Public License (APL). Not made or endorsed by CoalitionArma, so please report Bifrost VON
+problems here, not to them. Credits: [NOTICE.md](NOTICE.md). License: [LICENSE.md](LICENSE.md).
+
+| | |
+|---|---|
+| Workshop | [Bifrost VON](https://reforger.armaplatform.com/workshop/FE63A4168A0D582D-BifrostVON) (unlisted), ID `FE63A4168A0D582D` |
+| TeamSpeak plugin | Install it from [bifrost-von-plugin](https://github.com/25thplaymaking/bifrost-von-plugin) (3.1.0) |
+| What changed from Coalition VON | [docs/BIFROST_CHANGES.md](docs/BIFROST_CHANGES.md) |
+| How each radio's controls work | [docs/RADIO_CONTROLS.md](docs/RADIO_CONTROLS.md) |
+
+Folders: `CoalitionVON/` the Workbench addon (scripts, layouts, prefabs), `CoalitionTeamspeakPlugin/` the
+TeamSpeak 3 plugin (C, Makefile), `tools/uigen/` scripts that draw the radio layouts and art (edit those, not the
+layouts by hand). Do not load Bifrost VON together with Coalition VON: they share resource IDs.
+
+The upstream documentation follows. It applies to Bifrost VON unchanged unless the change notes say otherwise.
+
+---
+
 # Coalition TeamSpeak Plugin – Server Admin Quickstart Guide
 
 Arma Reforger writes a `VONServerSettings.json` file that tells the Coalition TeamSpeak Plugin how to connect and synchronize with your TeamSpeak server. This file is the single source of truth for connection details and channel management.

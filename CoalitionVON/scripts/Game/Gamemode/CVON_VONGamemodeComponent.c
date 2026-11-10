@@ -29,7 +29,10 @@ class CVON_VONGameModeComponent: SCR_BaseGameModeComponent
 	[RplProp()] ref array<int> m_aPlayerVolumes = {};
 	[RplProp()] ref array<int> m_aPlayerClientIds = {};
 	[RplProp()] ref array<int> m_aPlayerIds = {};
-	string m_sTeamspeakPluginVersion = "3.0.1";
+	//The Bifrost VON plugin this build ships with. Any plugin from MIN_PLUGIN_VERSION up works (the file
+	//protocol is unchanged); older than this one only misses its fixes, so players get a hint, not a block.
+	string m_sTeamspeakPluginVersion = "3.1.0";
+	static const string MIN_PLUGIN_VERSION = "3.0.1";
 	ref map <int, string> m_PlayerFreqArray = new map <int, string>;
 	ref map <int, string> m_PlayerKeyArray = new map <int, string>;
 
@@ -67,6 +70,35 @@ class CVON_VONGameModeComponent: SCR_BaseGameModeComponent
 
 	//If disabled everyone shares the same frequencies.
 	[Attribute("1")] bool m_bUseFactionEcncryption;
+
+	//Crew comms style: a vehicle radio takes the encryption and channels of whoever gets in a crew seat,
+	//unless someone else in a crew seat is already on its current key. Off: the crew fill it with the
+	//"Fill Vehicle Radio With Your Encryption" keybind, as in the original.
+	[Attribute("1", desc: "Vehicle radios take a crew member's encryption and channels when they get in a crew seat")]
+	bool m_bAutoFillVehicleRadios;
+
+	[Attribute("1", desc: "The radio pop-up opens when a call comes in and shows who is talking")]
+	bool m_bShowRadioCallerName;
+
+	//TFAR style: any radio a player carries can go on speaker ("Toggle Radio Speaker" keybind, active radio)
+	//so people nearby hear the net; off: manpacks and vehicles only, as in the original
+	[Attribute("1", desc: "Handheld radios can be put on speaker, not only manpacks and vehicle radios")]
+	bool m_bHandheldSpeakers;
+
+	//Terrain between two radios takes a share of the radio's range (SCR_VONController.TerrainRangeLoss). This
+	//scales every hill's height: 1 = as measured, 2 = a 30 m hill counts as 60 m, 0 turns terrain off.
+	[Attribute("1", desc: "Terrain effect on radio range: scales every hill's height (1 = as measured, 0 = off)")]
+	float m_fTerrainEffect;
+
+	//Radio key discipline (as Lima Charlie does it): keying a radio more than RADIO_KEY_LIMIT times in
+	//RADIO_KEY_WINDOW seconds locks radio transmission for RADIO_KEY_LOCK seconds with a deny sound
+	[Attribute("1", desc: "Lock the radio keys for 2 s after more than 4 key presses in 4 s")]
+	bool m_bRadioKeySpamLock;
+
+	//Game Master (as Lima Charlie offers it): with the editor open, a Game Master's radios reach everyone on the
+	//net and hear everyone on it clearly, wherever the camera or body is (no range or terrain)
+	[Attribute("1", desc: "Game Masters with the editor open transmit and receive radio without range or terrain limits")]
+	bool m_bGameMasterUnlimitedRadio;
 
 	//If disabled there will be no babbel for other factions
 	[Attribute("0")] bool m_bUseBabbel;
@@ -194,6 +226,43 @@ class CVON_VONGameModeComponent: SCR_BaseGameModeComponent
 		return m_Instance;
 	}
 
+	//Plugin versions are "major.minor.patch". Negative: a is older than b, 0 the same, positive newer.
+	//==========================================================================================================================================================================
+	static int CompareVersions(string a, string b)
+	{
+		array<string> partsA = {};
+		array<string> partsB = {};
+		a.Split(".", partsA, true);
+		b.Split(".", partsB, true);
+		int count = Math.Max(partsA.Count(), partsB.Count());
+		for (int i = 0; i < count; i++)
+		{
+			int valueA = 0;
+			int valueB = 0;
+			if (i < partsA.Count())
+				valueA = partsA[i].ToInt();
+			if (i < partsB.Count())
+				valueB = partsB[i].ToInt();
+			if (valueA != valueB)
+				return valueA - valueB;
+		}
+		return 0;
+	}
+
+	//The plugin speaks our file protocol (Coalition 3.0.1 or any Bifrost build)
+	bool IsPluginCompatible(string version)
+	{
+		if (version == "" || version == "0")
+			return false;
+		return CompareVersions(version, MIN_PLUGIN_VERSION) >= 0;
+	}
+
+	//The plugin is at least the one this build ships with
+	bool IsPluginCurrent(string version)
+	{
+		return IsPluginCompatible(version) && CompareVersions(version, m_sTeamspeakPluginVersion) >= 0;
+	}
+
 	void UpdateVolume(int playerId, int input)
 	{
 		int index = m_aPlayerIds.Find(playerId);
@@ -233,9 +302,30 @@ class CVON_VONGameModeComponent: SCR_BaseGameModeComponent
 	//This makes it so only the players that need to get the VONEntry get it, saving on that sweet sweet sweet network.
 	//Broadcasts are only tracked on the clients, server doesn't track it anywhere.
 	//==========================================================================================================================================================================
+	//Range a Game Master's radio reaches with m_bGameMasterUnlimitedRadio: far enough that distance never counts
+	static const float GAME_MASTER_RADIO_RANGE = 1000000;
+
+	//Is this player a Game Master with the full editor open (not a limited one like the Lobby's Tactical Camera)
+	static bool IsGameMasterEditing(int playerId)
+	{
+		SCR_EditorManagerCore core = SCR_EditorManagerCore.Cast(SCR_EditorManagerCore.GetInstance(SCR_EditorManagerCore));
+		if (!core)
+			return false;
+		SCR_EditorManagerEntity editor = core.GetEditorManager(playerId);
+		return editor && editor.IsOpened() && !editor.IsLimited();
+	}
+
+	//How far a call on this radio from this player reaches: its power setting, or unlimited for a Game Master
+	float SenderRadioRange(CVON_RadioComponent radioComp, int playerId)
+	{
+		if (m_bGameMasterUnlimitedRadio && IsGameMasterEditing(playerId))
+			return GAME_MASTER_RADIO_RANGE;
+		return radioComp.GetTransmitRange();
+	}
+
 	void AddLocalVONBroadcasts(CVON_VONContainer VONContainer, int playerIdToAdd, RplId radioId)
 	{
-		int maxDist = 0;
+		float maxDist = 0;
 		SCR_BaseGameMode gamemode = SCR_BaseGameMode.Cast(GetGame().GetGameMode());
 		if (!gamemode)
 			return;
@@ -252,7 +342,7 @@ class CVON_VONGameModeComponent: SCR_BaseGameModeComponent
 			if (!radioComp)
 				return;
 
-			maxDist = radioComp.m_iRadioRange;
+			maxDist = SenderRadioRange(radioComp, playerIdToAdd);
 		}
 
 		PlayerManager pm = GetGame().GetPlayerManager();
@@ -298,8 +388,8 @@ class CVON_VONGameModeComponent: SCR_BaseGameModeComponent
 							continue;
 
 						CVON_RadioComponent radioComp = CVON_RadioComponent.Cast(radio.FindComponent(CVON_RadioComponent));
-						//Not the radio we are looking for
-						if (radioComp.m_sFrequency != VONContainer.m_sFrequency)
+						//Not the radio we are looking for (main channel or the monitored one)
+						if (!radioComp.ReceivesFrequency(VONContainer.m_sFrequency))
 							continue;
 
 						if (radioComp.m_iTimeDeviation != VONContainer.m_iTimeDeviation)
@@ -675,7 +765,7 @@ class CVON_VONGameModeComponent: SCR_BaseGameModeComponent
 		foreach (IEntity radio: radios)
 		{
 			CVON_RadioComponent radioComp = CVON_RadioComponent.Cast(radio.FindComponent(CVON_RadioComponent));
-			if (!radioComp || radioComp.m_sFrequency != VONContainer.m_sFrequency || radioComp.m_iTimeDeviation != VONContainer.m_iTimeDeviation)
+			if (!radioComp || !radioComp.ReceivesFrequency(VONContainer.m_sFrequency) || radioComp.m_iTimeDeviation != VONContainer.m_iTimeDeviation)
 				continue;
 
 			if (encryption && VONContainer.m_sFactionKey != radioComp.m_sFactionKey)
