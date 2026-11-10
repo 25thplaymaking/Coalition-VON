@@ -3,6 +3,10 @@
 Forked from Coalition VON at upstream commit `9517a39` (Workshop 3.0.7, plugin 3.0.1). Credits and
 license: [NOTICE.md](../NOTICE.md), [LICENSE.md](../LICENSE.md).
 
+**Bifrost VON 1.0** is the first release: the mod as an unlisted Workshop item, version 1.0.0, with the
+Bifrost VON TeamSpeak plugin 3.1.0. The plugin keeps its own version line (newer than Coalition's 3.0.1)
+because the game checks that number; the mod and the plugin are versioned separately from here on.
+
 ## The night of 2026-11-06: what actually crashed
 
 - **The server crash (20:26 ET) was not in VON.** The dedicated server died inside the *Ambient
@@ -33,6 +37,20 @@ license: [NOTICE.md](../NOTICE.md), [LICENSE.md](../LICENSE.md).
 | Plugin version had to match exactly | Any plugin from 3.0.1 works; players on an older plugin get a one-time hint to install the Bifrost plugin. |
 | Every game start logged "Wrong GUID/name" for the five radio models' metal surface | The models were imported with a surface material (`material/metal.gamemat`) that never shipped, so dropped radios had no metal hit sounds or effects. The mod now carries that file, under the same ID, inheriting the game's own metal. |
 | Upstream's test world `VONTestBasic` logged errors for drone goggles, a drone and its controller | They came from another mod this one doesn't load; removed from the test layer. |
+
+Found in the 1.0 release review (most were in the upstream code too):
+
+| Problem | Fix |
+|---|---|
+| The channel up / down keybind on a hosting player's machine picked the next preset's frequency, or failed on the last preset | The next preset and its frequency are worked out before asking the server. Landing on the monitored channel turns the monitor off, as the radio menu already did. |
+| A radio switched off could still transmit on its radio key | It can't now (it already couldn't receive). |
+| Two quick PRE+ presses past the last preset made two blank presets | The second waits until the server has the first. |
+| After a respawn with a different loadout (no frequency config), saved frequencies went back by list position and radios picked up since were never tuned | Matched by radio type ("AN/PRC-152 #1"), the way ears and volumes already were; any other radio is tuned for the group. The frequency-config path matches by type too. |
+| On a hosting player's machine, every other player's spawn handed the host's own VON controller that player's character | Only our own controller is touched, and a character gone before the delayed setup is skipped instead of throwing. |
+| A vehicle radio key-filled by another crew kept its monitored channel number, now pointing at a different net | The monitor is switched off on a key fill. |
+| A monitored channel was dropped after respawn when the radio's channel list arrived late | Tried again up to three times, 1.5 s apart. |
+| The incoming-call pop-up could open on a radio on a different clock offset (which the server doesn't route to) | It matches the clock offset too. |
+| The server took the sender's player id from the client for a radio transmission (Game Master range, routing) | It uses the sending player's own controller. |
 
 ## New features
 
@@ -253,6 +271,11 @@ code is used.
 
   Screenshots of every radio on, lit and off checked by eye. The new textures were built by a headless
   Workbench pass.
+- 1.0 release review, 2026-11-10: the game scripts were read by a second reviewer and checked again here, and the
+  TeamSpeak plugin, assets, packaging and docs were reviewed. Nine defects fixed (table above). The self-test adds
+  the channel keybind on a hosting player's machine, a switched-off radio not transmitting and the pop-up's clock
+  offset. The plugin solution the repository's CI builds also compiles clean. The published pak leaves out
+  the source images: about 30 MB, like Coalition VON's.
 - **Not tested here (needs players and TeamSpeak):** hearing the monitored net, the pop-up during a real
   call, auto key fill with real crews, handheld speaker heard by others, terrain static in a real call.
 

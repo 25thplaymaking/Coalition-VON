@@ -19,7 +19,8 @@ to Task Force Halberd, not to the Coalition team.
 ## This fork
 
 **Bifrost VON** by Task Force Halberd (25thplaymaking), forked from upstream commit `9517a39`
-(Coalition VON 3.0.7 on the Workshop, plugin 3.0.1). Addon GUID `FE63A4168A0D582D`. It replaces
+(Coalition VON 3.0.7 on the Workshop, plugin 3.0.1). Released as Bifrost VON 1.0 (unlisted on the
+Workshop) with the Bifrost VON TeamSpeak plugin 3.1.0. Addon GUID `FE63A4168A0D582D`. It replaces
 Coalition VON on a server: do not load both.
 
 ### Changes from the original

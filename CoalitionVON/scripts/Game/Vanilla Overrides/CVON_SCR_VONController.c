@@ -340,40 +340,23 @@ modded class SCR_VONController
 			return;
 
 		if (radioComp.m_iCurrentChannel == 1 && input == -1)
-		{
 			return;
-		}
-		else if (radioComp.m_iCurrentChannel == 99 && input == 1)
-		{
-			radioComp.UpdateChannelClient(1);
-			string freq = radioComp.m_aChannels.Get(0);
-			radioComp.UpdateFrequencyClient(freq);
-			m_VONHud.ShowVONChange(0);
+
+		//The next channel and its frequency are worked out before asking the server: on a hosting player's
+		//machine the request changes m_iCurrentChannel at once, so reading it afterwards picked the wrong preset
+		//(or ran past the end of the list)
+		int next = radioComp.m_iCurrentChannel + input;
+		if (next > channelCount || next > 99)
+			next = 1;
+		if (next < 1)
 			return;
-		}
-		else if (radioComp.m_iCurrentChannel + input > channelCount)
-		{
-			radioComp.UpdateChannelClient(1);
-			string freq = radioComp.m_aChannels.Get(0);
-			radioComp.UpdateFrequencyClient(freq);
-			m_VONHud.ShowVONChange(0);
-			return;
-		}	
-		else
-		{
-			radioComp.UpdateChannelClient(radioComp.m_iCurrentChannel + input);
-		}
-		#ifdef WORKBENCH
-		string freq = radioComp.m_aChannels.Get(radioComp.m_iCurrentChannel - 1);
-		#else
-		string freq = radioComp.m_aChannels.Get(radioComp.m_iCurrentChannel - 1 + input);
-		#endif
+		string freq = radioComp.m_aChannels.Get(next - 1);
+		radioComp.UpdateChannelClient(next);
 		radioComp.UpdateFrequencyClient(freq);
-		#ifdef WORKBENCH
-		m_VONHud.ShowVONChange(radioComp.m_iCurrentChannel - 1);
-		#else
-		m_VONHud.ShowVONChange(radioComp.m_iCurrentChannel - 1 + input);
-		#endif
+		//A monitor on the channel we just moved to would hear the same net twice
+		if (radioComp.m_iMonitorChannel == next)
+			radioComp.SetMonitorChannelClient(0);
+		m_VONHud.ShowVONChange(next - 1);
 	}
 
 	//Fetches the VON HUD, delay is necessary.
@@ -548,7 +531,8 @@ modded class SCR_VONController
 						return;
 
 					CVON_RadioComponent radioComp = CVON_RadioComponent.Cast(radio.FindComponent(CVON_RadioComponent));
-					if (!radioComp)
+					//A radio switched off can't transmit
+					if (!radioComp || !radioComp.m_bPower)
 						return;
 					container.m_sFrequency = radioComp.m_sFrequency;
 					container.m_iRadioId = RplComponent.Cast(radio.FindComponent(RplComponent)).Id();
@@ -571,7 +555,7 @@ modded class SCR_VONController
 						return;
 
 					CVON_RadioComponent radioComp = CVON_RadioComponent.Cast(radio.FindComponent(CVON_RadioComponent));
-					if (!radioComp)
+					if (!radioComp || !radioComp.m_bPower)
 						return;
 					container.m_sFrequency = radioComp.m_sFrequency;
 					container.m_iRadioId = RplComponent.Cast(radio.FindComponent(RplComponent)).Id();
@@ -594,7 +578,7 @@ modded class SCR_VONController
 						return;
 
 					CVON_RadioComponent radioComp = CVON_RadioComponent.Cast(radio.FindComponent(CVON_RadioComponent));
-					if (!radioComp)
+					if (!radioComp || !radioComp.m_bPower)
 						return;
 					container.m_sFrequency = radioComp.m_sFrequency;
 					container.m_iRadioId = RplComponent.Cast(radio.FindComponent(RplComponent)).Id();
@@ -1158,6 +1142,8 @@ modded class SCR_VONController
 				continue;
 			CVON_RadioComponent radioComp = CVON_RadioComponent.Cast(radioEntity.FindComponent(CVON_RadioComponent));
 			if (!radioComp || !radioComp.m_bPower || !radioComp.ReceivesFrequency(call.m_sFrequency))
+				continue;
+			if (radioComp.m_iTimeDeviation != call.m_iTimeDeviation)
 				continue;
 			if (encryption && call.m_sFactionKey != radioComp.m_sFactionKey)
 				continue;

@@ -826,6 +826,10 @@ class CVON_RadioMenu: MenuBase
 		string frequency;
 		if (next > channelCount)
 		{
+			//A new preset already asked for and not back from the server yet: a second quick press would make
+			//another blank one
+			if (m_iPendingChannel > channelCount)
+				return;
 			m_RadioComponent.AddChannelClient();
 			frequency = "55500";
 			next = channelCount + 1;

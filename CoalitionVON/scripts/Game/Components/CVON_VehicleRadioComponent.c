@@ -187,6 +187,8 @@ class CVON_VehicleRadioComponent: CVON_RadioComponent
 		}
 
 		SelectStartingChannel();
+		//The channel list was rebuilt: a monitored channel number would now point at another net
+		m_iMonitorChannel = 0;
 		BumpAndNotify();
 	}
 

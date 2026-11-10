@@ -181,11 +181,16 @@ modded class SCR_PlayerController
 		return radioComp.m_sRadioName + "#" + seen.ToString();
 	}
 
-	//Local: put saved ears, volumes and monitored channels back on our new radios (after a respawn)
-	protected void RestoreLocalRadioSettings()
+	//Local: put saved ears, volumes and monitored channels back on our new radios (after a respawn).
+	//monitorsOnly: a later try for monitored channels whose radio had no channel list yet.
+	protected int m_iMonitorRestoreTries;
+	protected void RestoreLocalRadioSettings(bool monitorsOnly = false)
 	{
 		if (m_aRadioSettings.IsEmpty())
 			return;
+		if (!monitorsOnly)
+			m_iMonitorRestoreTries = 0;
+		bool channelsMissing = false;
 
 		map<string, ref CVON_RadioSettingObject> byKey = new map<string, ref CVON_RadioSettingObject>();
 		foreach (CVON_RadioSettingObject saved: m_aRadioSettings)
@@ -207,17 +212,31 @@ modded class SCR_PlayerController
 			if (!byKey.Find(RadioSettingKey(radioComp, nameCounts), setting))
 				continue;
 
+			//The monitored net comes back if the new radio has it on one of its channels; a radio whose channel
+			//list hasn't arrived from the server yet is tried again shortly
+			if (setting.m_sMonitorFreq != "" && radioComp.m_aChannels.IsEmpty())
+				channelsMissing = true;
+			else
+			{
+				int monitorChannel = 0;
+				if (setting.m_sMonitorFreq != "")
+					monitorChannel = radioComp.m_aChannels.Find(setting.m_sMonitorFreq) + 1;
+				if (monitorChannel != radioComp.m_iMonitorChannel)
+					radioComp.SetMonitorChannelClient(monitorChannel, false);
+			}
+			if (monitorsOnly)
+				continue;
+
 			radioComp.m_iVolume = setting.m_iVolume;
 			radioComp.m_eStereo = setting.m_Stereo;
 			radioComp.m_eMonitorStereo = setting.m_MonitorStereo;
-			//The monitored net comes back if the new radio has it on one of its channels
-			int monitorChannel = 0;
-			if (setting.m_sMonitorFreq != "")
-				monitorChannel = radioComp.m_aChannels.Find(setting.m_sMonitorFreq) + 1;
-			if (monitorChannel != radioComp.m_iMonitorChannel)
-				radioComp.SetMonitorChannelClient(monitorChannel, false);
 			if (setting.m_iTxPower != radioComp.m_iTxPower)
 				radioComp.SetTxPowerClient(setting.m_iTxPower, false);
+		}
+		if (channelsMissing && m_iMonitorRestoreTries < 3)
+		{
+			m_iMonitorRestoreTries++;
+			GetGame().GetCallqueue().CallLater(RestoreLocalRadioSettings, 1500, false, true);
 		}
 	}
 
@@ -444,10 +463,20 @@ modded class SCR_PlayerController
 		if (!CVON_VONGameModeComponent.GetInstance())
 			return;
 
-		if (GetGame().GetPlayerController())
+		//The character can be gone by the time this runs (cleaned up, player left): no radios then
+		if (!to)
 		{
-			SCR_VONController vonController = SCR_VONController.Cast(GetGame().GetPlayerController().FindComponent(SCR_VONController));
-			vonController.m_CharacterController = SCR_CharacterControllerComponent.Cast(to.FindComponent(SCR_CharacterControllerComponent));
+			m_aRadios.Clear();
+			return;
+		}
+
+		//Our own VON controller follows our own character only. On a hosting player's machine the server runs
+		//this for every player's controller, which used to hand the host's controller someone else's character.
+		if (this == GetGame().GetPlayerController())
+		{
+			SCR_VONController vonController = SCR_VONController.Cast(FindComponent(SCR_VONController));
+			if (vonController)
+				vonController.m_CharacterController = SCR_CharacterControllerComponent.Cast(to.FindComponent(SCR_CharacterControllerComponent));
 		}
 		m_aRadios.Clear();
 		//Reforger Lobby bs
@@ -561,7 +590,12 @@ modded class SCR_PlayerController
 	[RplRpc(RplChannel.Reliable, RplRcver.Server)] 
 	void RpcAsk_BroadcastLocalVONToServer(CVON_VONContainer VONContainer, int playerId, RplId radioId)
 	{
-		CVON_VONGameModeComponent.GetInstance().AddLocalVONBroadcasts(VONContainer, playerId, radioId);
+		CVON_VONGameModeComponent gamemode = CVON_VONGameModeComponent.GetInstance();
+		if (!gamemode)
+			return;
+		//The sender is the owner of this controller, whatever id the client sent (Game Master range and the
+		//routing go by it)
+		gamemode.AddLocalVONBroadcasts(VONContainer, GetPlayerId(), radioId);
 	}
 
 	//This is how the server talks directly to us, by doing an Rpc to the owner, which is the player of this controller, it sends it directly to them.
