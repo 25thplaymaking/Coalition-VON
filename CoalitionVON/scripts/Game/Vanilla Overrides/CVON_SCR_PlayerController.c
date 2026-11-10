@@ -1,14 +1,14 @@
 class CVON_RadioSettingObject
 {
 	string m_sFreq = "";
-	CVON_EStereo m_Stereo = CVON_EStereo.BOTH;
+	//Each channel's ear by channel number (CVON_RadioComponent.m_mChannelEars), the monitored channel's too
+	ref map<int, int> m_mChannelEars = new map<int, int>();
 	int m_iVolume = 9;
 	//Which radio this was: its name and how many of that name came before it ("AN/PRC-152#0"), so ears and
 	//volumes go back on the same kind of radio after a respawn, whatever order the new radios are listed in
 	string m_sKey = "";
-	//The monitored channel's frequency and its ear (CVON_RadioComponent.m_iMonitorChannel), "" for none
+	//The monitored channel's frequency (CVON_RadioComponent.m_iMonitorChannel), "" for none
 	string m_sMonitorFreq = "";
-	CVON_EStereo m_MonitorStereo = CVON_EStereo.BOTH;
 	//Transmit power (CVON_RadioComponent.m_iTxPower)
 	int m_iTxPower = CVON_ETxPower.HIGH;
 }
@@ -162,11 +162,10 @@ modded class SCR_PlayerController
 				continue;
 			ref CVON_RadioSettingObject setting = new CVON_RadioSettingObject();
 			setting.m_sFreq = radioComp.m_sFrequency;
-			setting.m_Stereo = radioComp.m_eStereo;
+			setting.m_mChannelEars.Copy(radioComp.m_mChannelEars);
 			setting.m_iVolume = radioComp.m_iVolume;
 			setting.m_sKey = RadioSettingKey(radioComp, nameCounts);
 			setting.m_sMonitorFreq = radioComp.GetMonitorFrequency();
-			setting.m_MonitorStereo = radioComp.m_eMonitorStereo;
 			setting.m_iTxPower = radioComp.m_iTxPower;
 			m_aRadioSettings.Insert(setting);
 		}
@@ -228,8 +227,7 @@ modded class SCR_PlayerController
 				continue;
 
 			radioComp.m_iVolume = setting.m_iVolume;
-			radioComp.m_eStereo = setting.m_Stereo;
-			radioComp.m_eMonitorStereo = setting.m_MonitorStereo;
+			radioComp.m_mChannelEars.Copy(setting.m_mChannelEars);
 			if (setting.m_iTxPower != radioComp.m_iTxPower)
 				radioComp.SetTxPowerClient(setting.m_iTxPower, false);
 		}
@@ -875,7 +873,7 @@ modded class SCR_PlayerController
 		CVON_RadioComponent radioComp = CVON_RadioComponent.Cast(m_aRadios.Get(radioIndex).FindComponent(CVON_RadioComponent));
 		if (!radioComp)
 			return;
-		radioComp.m_eStereo = stereo;
+		radioComp.SetChannelEar(radioComp.m_iCurrentChannel, stereo);
 		radioComp.WriteJSON(GetLocalControlledEntity());
 	}
 
