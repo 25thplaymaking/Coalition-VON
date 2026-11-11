@@ -615,9 +615,9 @@ class CVON_RadioMenu: MenuBase
 		{
 			case CVON_ERadioOption.VOLUME: {return m_RadioComponent.m_iVolume;}
 			case CVON_ERadioOption.TX_POWER: {return m_RadioComponent.m_iTxPower;}
-			case CVON_ERadioOption.EAR: {return m_RadioComponent.m_eStereo;}
+			case CVON_ERadioOption.EAR: {return m_RadioComponent.GetChannelEar(ShownChannel());}
 			case CVON_ERadioOption.MONITOR: {return m_RadioComponent.m_iMonitorChannel;}
-			case CVON_ERadioOption.MONITOR_EAR: {return m_RadioComponent.m_eMonitorStereo;}
+			case CVON_ERadioOption.MONITOR_EAR: {return m_RadioComponent.GetMonitorEar();}
 			case CVON_ERadioOption.LIGHT: {return s_iLight;}
 			case CVON_ERadioOption.CLOCK: {return m_RadioComponent.m_iTimeDeviation;}
 		}
@@ -664,14 +664,15 @@ class CVON_RadioMenu: MenuBase
 			case CVON_ERadioOption.TX_POWER: {m_RadioComponent.SetTxPowerClient(value); return;}
 			case CVON_ERadioOption.EAR:
 			{
-				m_RadioComponent.m_eStereo = value;
+				//The channel on the display keeps this ear; the radio's other channels keep theirs
+				m_RadioComponent.SetChannelEar(ShownChannel(), value);
 				SaveSettings();
 				return;
 			}
 			case CVON_ERadioOption.MONITOR: {m_RadioComponent.SetMonitorChannelClient(value); return;}
 			case CVON_ERadioOption.MONITOR_EAR:
 			{
-				m_RadioComponent.m_eMonitorStereo = value;
+				m_RadioComponent.SetChannelEar(m_RadioComponent.m_iMonitorChannel, value);
 				SaveSettings();
 				return;
 			}
@@ -1208,9 +1209,9 @@ class CVON_RadioMenu: MenuBase
 				mainText = FormatFrequency(frequency);
 				string monitor = m_RadioComponent.GetMonitorFrequency();
 				if (monitor != "")
-					info = "MON P" + PadChannel(m_RadioComponent.m_iMonitorChannel) + " " + FormatFrequency(monitor) + " " + EarLetter(m_RadioComponent.m_eMonitorStereo);
+					info = "MON P" + PadChannel(m_RadioComponent.m_iMonitorChannel) + " " + FormatFrequency(monitor) + " " + EarLetter(m_RadioComponent.GetMonitorEar());
 				else
-					info = "EAR " + EarText(m_RadioComponent.m_eStereo);
+					info = "EAR " + EarText(m_RadioComponent.GetChannelEar(channel));
 				break;
 			}
 			case CVON_ERadioScreen.ENTRY:

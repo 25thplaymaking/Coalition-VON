@@ -7,6 +7,16 @@ license: [NOTICE.md](../NOTICE.md), [LICENSE.md](../LICENSE.md).
 Bifrost VON TeamSpeak plugin 3.1.0. The plugin keeps its own version line (newer than Coalition's 3.0.1)
 because the game checks that number; the mod and the plugin are versioned separately from here on.
 
+## 1.0.1 (from Bryce's first test on the live servers, 2026-11-10)
+
+Mod only; the TeamSpeak plugin stays 3.1.0.
+
+| Found | Now |
+|---|---|
+| A radio had one ear for all its channels: setting channel 2 to the right ear moved channel 1 there too | Each channel keeps its own ear, per radio. Switching channel (keypad, PRE, channel keys) brings that channel's ear back; a channel never set plays in both. The monitored channel plays in its own channel's ear. Ears come back on respawn. |
+| No quick way to work two nets like TFAR's additional channel | The monitored channel works as the alternate channel. **Swap key** (default Ctrl + Right arrow, "Active Radio: Swap Channel And Monitored Channel"): the monitored channel becomes the one you talk on and the old one is monitored, each keeping its ear. **Alternate transmit key** ("Active Radio: Transmit On Monitored Channel", no default key; bind it in Settings > Keybinds): talk on the monitored channel without swapping. |
+| A wall or a closed door between two people didn't muffle their voices | Muffling only happened when one of them was inside a building and the other outside (or a floor apart), so two rooms on one floor, or a wall between two people outside, sounded clear. Now anything solid on the line between their heads muffles the voice (stronger if either is in a vehicle); trees, people, fences and small props still don't. Two fewer traces per check, too. |
+
 ## The night of 2026-11-06: what actually crashed
 
 - **The server crash (20:26 ET) was not in VON.** The dedicated server died inside the *Ambient

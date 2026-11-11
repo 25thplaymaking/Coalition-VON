@@ -85,16 +85,16 @@ class CVON_RadioComponent: ScriptComponent
 	//How loud the radio is
 	int m_iVolume = 9;
 
-	//What ear it comes out of, neither needs to be tracked across clients cause who gives af.
-	CVON_EStereo m_eStereo = CVON_EStereo.BOTH;
+	//What ear each channel comes out of, by channel number (1 = m_aChannels[0]). Each preset remembers its
+	//own, so switching channel brings back that channel's ear; a channel never set plays in both. Local only:
+	//nobody else needs it. GetEar / GetMonitorEar give the main and monitored channel's ears.
+	ref map<int, int> m_mChannelEars = new map<int, int>();
 
 	//Monitor (TFAR's "additional channel"): one more of this radio's channels is heard as well, in its own
 	//ear, so two nets play at once from one radio. 0 is off, else a channel number (1 = m_aChannels[0]).
-	//Replicated so the server routes that net's traffic to us; transmitting stays on the main channel.
+	//Replicated so the server routes that net's traffic to us. The radio keys transmit on the main channel;
+	//the alternate-channel key transmits on this one, and the swap key trades the two.
 	[RplProp(onRplName: "OnRadioStateReplicated")] int m_iMonitorChannel = 0;
-
-	//The monitored channel's ear, local like m_eStereo
-	CVON_EStereo m_eMonitorStereo = CVON_EStereo.BOTH;
 
 	//Speaker: the radio plays out loud for the people around it, positioned where it is. Speakers start
 	//off; a vehicle's crew or a manpack's carrier turns theirs on (CanUseSpeaker / SpeakerOnByDefault).
@@ -263,6 +263,58 @@ class CVON_RadioComponent: ScriptComponent
 		if (m_iMonitorChannel < 1 || m_iMonitorChannel > m_aChannels.Count())
 			return "";
 		return m_aChannels.Get(m_iMonitorChannel - 1);
+	}
+
+	//Ears
+	//==========================================================================================================================================================================
+	CVON_EStereo GetChannelEar(int channel)
+	{
+		int ear;
+		if (channel > 0 && m_mChannelEars.Find(channel, ear))
+			return ear;
+		return CVON_EStereo.BOTH;
+	}
+
+	//Local: the ear for one channel; the next RadioData.json write sends it to the plugin
+	void SetChannelEar(int channel, CVON_EStereo ear)
+	{
+		if (channel < 1)
+			return;
+		if (ear == CVON_EStereo.BOTH)
+			m_mChannelEars.Remove(channel);
+		else
+			m_mChannelEars.Set(channel, ear);
+	}
+
+	//The main channel's ear
+	CVON_EStereo GetEar()
+	{
+		return GetChannelEar(m_iCurrentChannel);
+	}
+
+	//The monitored channel's ear
+	CVON_EStereo GetMonitorEar()
+	{
+		return GetChannelEar(m_iMonitorChannel);
+	}
+
+	//Swap key (TFAR's quick swap between the two channels): the monitored channel becomes the main one we
+	//transmit on, and the old main channel is monitored. Each keeps its own ear. False with nothing monitored.
+	bool SwapWithMonitorClient()
+	{
+		int main = m_iCurrentChannel;
+		int monitor = m_iMonitorChannel;
+		if (monitor < 1 || monitor > m_aChannels.Count() || monitor == main)
+			return false;
+		//Worked out before asking the server: on a hosting player's machine each request applies at once
+		string monitorFreq = m_aChannels.Get(monitor - 1);
+		int newMonitor = 0;
+		if (main >= 1 && main <= m_aChannels.Count())
+			newMonitor = main;	//a frequency typed in by hand (no preset) can't be monitored
+		UpdateChannelClient(monitor);
+		UpdateFrequencyClient(monitorFreq);
+		SetMonitorChannelClient(newMonitor);
+		return true;
 	}
 
 	//Net name for a frequency, shown on the radio display and the HUD: the owning group's m_sNetName,
@@ -832,7 +884,7 @@ class CVON_RadioComponent: ScriptComponent
 			VONSave.WriteValue("Freq", radioComp.m_sFrequency);
 			VONSave.WriteValue("TimeDeviation", radioComp.m_iTimeDeviation);
 			VONSave.WriteValue("Volume", radioComp.m_iVolume);
-			VONSave.WriteValue("Stereo", radioComp.m_eStereo);
+			VONSave.WriteValue("Stereo", radioComp.GetEar());
 			if (gamemode.IsEncryptionEnabled())
 				VONSave.WriteValue("FactionKey", radioComp.m_sFactionKey);
 			else
@@ -850,7 +902,7 @@ class CVON_RadioComponent: ScriptComponent
 				VONSave.WriteValue("Freq", monitorFreq);
 				VONSave.WriteValue("TimeDeviation", radioComp.m_iTimeDeviation);
 				VONSave.WriteValue("Volume", radioComp.m_iVolume);
-				VONSave.WriteValue("Stereo", radioComp.m_eMonitorStereo);
+				VONSave.WriteValue("Stereo", radioComp.GetMonitorEar());
 				if (gamemode.IsEncryptionEnabled())
 					VONSave.WriteValue("FactionKey", radioComp.m_sFactionKey);
 				else

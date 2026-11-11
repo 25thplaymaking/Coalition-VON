@@ -238,7 +238,7 @@ class CVON_HUD: SCR_InfoDisplay {
 			channelLine += "  " + PopupTrim(label, POPUP_NET_CHARS);
 		PopupText("PopupChannel", channelLine);
 
-		CVON_EStereo shownEar = radioComp.m_eStereo;
+		CVON_EStereo shownEar = radioComp.GetEar();
 		if (ear >= 0)
 			shownEar = ear;
 		string ears = CVON_RadioMenu.StereoText(shownEar);
@@ -423,7 +423,7 @@ class CVON_HUD: SCR_InfoDisplay {
 		//Channel text
 		channel.SetText(string.Format("CH-%1", input + 1));
 
-		CVON_EStereo ear = radioComp.m_eStereo;
+		CVON_EStereo ear = radioComp.GetEar();
 		if (earOverride >= 0)
 			ear = earOverride;
 

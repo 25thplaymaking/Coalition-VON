@@ -5,7 +5,8 @@ enum CVON_EVONTransmitType
 	DIRECT,
 	SR,
 	LR,
-	LR2
+	LR2,
+	ALT		//the active radio's monitored channel (TFAR's additional channel)
 }
 
 modded class SCR_VONController
@@ -101,6 +102,39 @@ modded class SCR_VONController
 		ActivateCVON(CVON_EVONTransmitType.LR2);
 	}
 
+	//Transmit on the active radio's monitored channel
+	//==========================================================================================================================================================================
+	void ActivateCVONAlt()
+	{
+		if (m_bToggleBuffer)
+		{
+			m_bToggleBuffer = false;
+			DeactivateCVON();
+			m_VONHud.ShowDirectToggle();
+			m_bToggleTurnedOffByRadio = true;
+		}
+		ActivateCVON(CVON_EVONTransmitType.ALT);
+	}
+
+	//Swap key: the active radio's monitored channel becomes its main channel and the main one is monitored
+	//==========================================================================================================================================================================
+	void SwapActiveRadioChannels()
+	{
+		if (!m_PlayerController || m_PlayerController.m_aRadios.Count() == 0 || !m_PlayerController.m_aRadios.Get(0))
+			return;
+		CVON_RadioComponent radioComp = CVON_RadioComponent.Cast(m_PlayerController.m_aRadios.Get(0).FindComponent(CVON_RadioComponent));
+		if (!radioComp)
+			return;
+		int next = radioComp.m_iMonitorChannel;
+		if (!radioComp.SwapWithMonitorClient())
+		{
+			SCR_UISoundEntity.SoundEvent(SCR_SoundEvent.ACTION_FAILED);
+			return;
+		}
+		if (m_VONHud)
+			m_VONHud.ShowVONChange(next - 1);
+	}
+
 	//How we rotate what radio is assigned to caps-lock, aka active.
 	//==========================================================================================================================================================================
 	void RotateActiveRadio()
@@ -151,6 +185,9 @@ modded class SCR_VONController
 			m_InputManager.AddActionListener("VONRotateActive", EActionTrigger.DOWN, RotateActiveRadio);
 			m_InputManager.AddActionListener("VONChannelUp", EActionTrigger.DOWN, ChannelUp);
 			m_InputManager.AddActionListener("VONChannelDown", EActionTrigger.DOWN, ChannelDown);
+			m_InputManager.AddActionListener("VONChannelSwap", EActionTrigger.DOWN, SwapActiveRadioChannels);
+			m_InputManager.AddActionListener("VONAltChannel", EActionTrigger.DOWN, ActivateCVONAlt);
+			m_InputManager.AddActionListener("VONAltChannel", EActionTrigger.UP, ReleaseRadioKey);
 			m_InputManager.AddActionListener("VONOpenActive", EActionTrigger.DOWN, OpenActiveRadio);
 			m_InputManager.AddActionListener("VONRadioEarRight", EActionTrigger.DOWN, SetActiveEarRight);
 			m_InputManager.AddActionListener("VONRadioEarLeft", EActionTrigger.DOWN, SetActiveEarLeft);
@@ -201,7 +238,7 @@ modded class SCR_VONController
 		CVON_RadioComponent radioComp = CVON_RadioComponent.Cast(m_PlayerController.m_aRadios.Get(0).FindComponent(CVON_RadioComponent));
 		if (!radioComp)
 			return;
-		radioComp.m_eStereo = CVON_EStereo.RIGHT;
+		radioComp.SetChannelEar(radioComp.m_iCurrentChannel, CVON_EStereo.RIGHT);
 		radioComp.WriteJSON(m_Player);
 		m_PlayerController.UpdateSettings();
 		m_VONHud.ShowVONChange(radioComp.m_iCurrentChannel - 1);
@@ -217,7 +254,7 @@ modded class SCR_VONController
 		CVON_RadioComponent radioComp = CVON_RadioComponent.Cast(m_PlayerController.m_aRadios.Get(0).FindComponent(CVON_RadioComponent));
 		if (!radioComp)
 			return;
-		radioComp.m_eStereo = CVON_EStereo.LEFT;
+		radioComp.SetChannelEar(radioComp.m_iCurrentChannel, CVON_EStereo.LEFT);
 		radioComp.WriteJSON(m_Player);
 		m_PlayerController.UpdateSettings();
 		m_VONHud.ShowVONChange(radioComp.m_iCurrentChannel - 1);
@@ -233,7 +270,7 @@ modded class SCR_VONController
 		CVON_RadioComponent radioComp = CVON_RadioComponent.Cast(m_PlayerController.m_aRadios.Get(0).FindComponent(CVON_RadioComponent));
 		if (!radioComp)
 			return;
-		radioComp.m_eStereo = CVON_EStereo.BOTH;
+		radioComp.SetChannelEar(radioComp.m_iCurrentChannel, CVON_EStereo.BOTH);
 		radioComp.WriteJSON(m_Player);
 		m_PlayerController.UpdateSettings();
 		m_VONHud.ShowVONChange(radioComp.m_iCurrentChannel - 1);
@@ -423,13 +460,19 @@ modded class SCR_VONController
 			case CVON_EVONTransmitType.SR: {index = 0; break;}
 			case CVON_EVONTransmitType.LR: {index = 1; break;}
 			case CVON_EVONTransmitType.LR2: {index = 2; break;}
+			case CVON_EVONTransmitType.ALT: {index = 0; break;}
 		}
 		if (index < 0 || !m_PlayerController || index >= m_PlayerController.m_aRadios.Count())
 			return null;
 		return m_PlayerController.m_aRadios.Get(index);
 	}
 
-	//The same radio's key pressed again while its transmission is still in the release tail
+	static bool IsRadioKey(CVON_EVONTransmitType transmitType)
+	{
+		return transmitType == CVON_EVONTransmitType.SR || transmitType == CVON_EVONTransmitType.LR || transmitType == CVON_EVONTransmitType.LR2 || transmitType == CVON_EVONTransmitType.ALT;
+	}
+
+	//The same radio's key pressed again, on the same channel, while its transmission is still in the release tail
 	bool ContinuesPendingTransmission(CVON_EVONTransmitType transmitType)
 	{
 		if (!m_bReleasePending || !m_CurrentVONContainer || m_CurrentVONContainer.m_eVonType != CVON_EVONType.RADIO)
@@ -438,7 +481,16 @@ modded class SCR_VONController
 		if (!pressedRadio)
 			return false;
 		RplComponent pressedRpl = RplComponent.Cast(pressedRadio.FindComponent(RplComponent));
-		return pressedRpl && pressedRpl.Id() == m_CurrentVONContainer.m_iRadioId;
+		if (!pressedRpl || pressedRpl.Id() != m_CurrentVONContainer.m_iRadioId)
+			return false;
+		//The main key and the alternate key share a radio but not a net
+		CVON_RadioComponent pressedComp = CVON_RadioComponent.Cast(pressedRadio.FindComponent(CVON_RadioComponent));
+		if (!pressedComp)
+			return false;
+		string pressedFreq = pressedComp.m_sFrequency;
+		if (transmitType == CVON_EVONTransmitType.ALT)
+			pressedFreq = pressedComp.GetMonitorFrequency();
+		return pressedFreq == m_CurrentVONContainer.m_sFrequency;
 	}
 
 	//Counts a radio key press. False while the radio keys are locked, or when this press locks them.
@@ -482,7 +534,7 @@ modded class SCR_VONController
 		if (m_CharacterController.GetLifeState() != ECharacterLifeState.ALIVE)
 			return;
 
-		bool radioKey = transmitType == CVON_EVONTransmitType.SR || transmitType == CVON_EVONTransmitType.LR || transmitType == CVON_EVONTransmitType.LR2;
+		bool radioKey = IsRadioKey(transmitType);
 		//Same radio pressed again inside the release tail: one continuous transmission
 		if (radioKey && ContinuesPendingTransmission(transmitType))
 		{
@@ -503,7 +555,7 @@ modded class SCR_VONController
 			return;
 		if (transmitType == CVON_EVONTransmitType.DIRECT)
 			container.m_eVonType = CVON_EVONType.DIRECT;
-		else if (transmitType == CVON_EVONTransmitType.SR || transmitType == CVON_EVONTransmitType.LR || transmitType == CVON_EVONTransmitType.LR2)
+		else if (IsRadioKey(transmitType))
 			container.m_eVonType = CVON_EVONType.RADIO;
 
 		container.m_iVolume = m_PlayerController.ReturnLocalVoiceVolume();
@@ -538,7 +590,7 @@ modded class SCR_VONController
 					container.m_iRadioId = RplComponent.Cast(radio.FindComponent(RplComponent)).Id();
 					container.m_sFactionKey = radioComp.m_sFactionKey;
 					container.m_iTimeDeviation = radioComp.m_iTimeDeviation;
-					switch (radioComp.m_eStereo)
+					switch (radioComp.GetEar())
 					{
 						case CVON_EStereo.BOTH:  {AudioSystem.PlaySound("{E3B4231783ABA914}UI/sounds/beepstart.wav"); break;}
 						case CVON_EStereo.LEFT:  {AudioSystem.PlaySound("{3B2D6B4BBEA1CE72}UI/sounds/beepstartleft.wav"); break;}
@@ -561,7 +613,7 @@ modded class SCR_VONController
 					container.m_iRadioId = RplComponent.Cast(radio.FindComponent(RplComponent)).Id();
 					container.m_sFactionKey = radioComp.m_sFactionKey;
 					container.m_iTimeDeviation = radioComp.m_iTimeDeviation;
-					switch (radioComp.m_eStereo)
+					switch (radioComp.GetEar())
 					{
 						case CVON_EStereo.BOTH:  {AudioSystem.PlaySound("{E3B4231783ABA914}UI/sounds/beepstart.wav"); break;}
 						case CVON_EStereo.LEFT:  {AudioSystem.PlaySound("{3B2D6B4BBEA1CE72}UI/sounds/beepstartleft.wav"); break;}
@@ -584,7 +636,36 @@ modded class SCR_VONController
 					container.m_iRadioId = RplComponent.Cast(radio.FindComponent(RplComponent)).Id();
 					container.m_sFactionKey = radioComp.m_sFactionKey;
 					container.m_iTimeDeviation = radioComp.m_iTimeDeviation;
-					switch (radioComp.m_eStereo)
+					switch (radioComp.GetEar())
+					{
+						case CVON_EStereo.BOTH:  {AudioSystem.PlaySound("{E3B4231783ABA914}UI/sounds/beepstart.wav"); break;}
+						case CVON_EStereo.LEFT:  {AudioSystem.PlaySound("{3B2D6B4BBEA1CE72}UI/sounds/beepstartleft.wav"); break;}
+						case CVON_EStereo.RIGHT: {AudioSystem.PlaySound("{18F289DB8B5F38D1}UI/sounds/beepstartright.wav"); break;}
+					}
+					break;
+				}
+				case CVON_EVONTransmitType.ALT:
+				{
+					//The active radio's monitored channel: its net, its ear for the beep
+					if (m_PlayerController.m_aRadios.Count() < 1)
+						return;
+					IEntity radio = m_PlayerController.m_aRadios.Get(0);
+					if (!radio)
+						return;
+					CVON_RadioComponent radioComp = CVON_RadioComponent.Cast(radio.FindComponent(CVON_RadioComponent));
+					if (!radioComp || !radioComp.m_bPower)
+						return;
+					string monitorFreq = radioComp.GetMonitorFrequency();
+					if (monitorFreq == "")
+					{
+						SCR_UISoundEntity.SoundEvent(SCR_SoundEvent.ACTION_FAILED);
+						return;
+					}
+					container.m_sFrequency = monitorFreq;
+					container.m_iRadioId = RplComponent.Cast(radio.FindComponent(RplComponent)).Id();
+					container.m_sFactionKey = radioComp.m_sFactionKey;
+					container.m_iTimeDeviation = radioComp.m_iTimeDeviation;
+					switch (radioComp.GetMonitorEar())
 					{
 						case CVON_EStereo.BOTH:  {AudioSystem.PlaySound("{E3B4231783ABA914}UI/sounds/beepstart.wav"); break;}
 						case CVON_EStereo.LEFT:  {AudioSystem.PlaySound("{3B2D6B4BBEA1CE72}UI/sounds/beepstartleft.wav"); break;}
@@ -633,7 +714,11 @@ modded class SCR_VONController
 					CVON_RadioComponent radioComp = CVON_RadioComponent.Cast(radio.FindComponent(CVON_RadioComponent));
 					if (radioComp)
 					{
-						switch (radioComp.m_eStereo)
+						//Sent on the monitored channel (alternate key): that channel's ear
+						CVON_EStereo endEar = radioComp.GetEar();
+						if (m_CurrentVONContainer.m_sFrequency != radioComp.m_sFrequency && m_CurrentVONContainer.m_sFrequency == radioComp.GetMonitorFrequency())
+							endEar = radioComp.GetMonitorEar();
+						switch (endEar)
 						{
 							case CVON_EStereo.BOTH:  {AudioSystem.PlaySound("{B826EAACD5F6B6BB}UI/sounds/beepend.wav"); break;}
 							case CVON_EStereo.LEFT:  {AudioSystem.PlaySound("{ABDEAEC2D5718124}UI/sounds/beependleft.wav"); break;}
@@ -1152,12 +1237,12 @@ modded class SCR_VONController
 			if (radioComp.m_sFrequency == call.m_sFrequency)
 			{
 				outChannel = radioComp.m_iCurrentChannel;
-				outEar = radioComp.m_eStereo;
+				outEar = radioComp.GetEar();
 			}
 			else
 			{
 				outChannel = radioComp.m_iMonitorChannel;
-				outEar = radioComp.m_eMonitorStereo;
+				outEar = radioComp.GetMonitorEar();
 			}
 			return true;
 		}
@@ -1918,26 +2003,11 @@ modded class SCR_VONController
 		return width > 0 && width < THIN_PROP_WIDTH;
 	}
 
-	void DetermineHearingWindow(IEntity entity, out float top, out float bottom)
-	{
-		vector origin = GetHeadHeight(entity);
-		vector end = entity.GetOrigin();
-		end[1] = end[1] + 100;
-		float distanceUp = TraceOcclusion(origin, end, entity, null) * 100;
-
-		end[1] = end[1] + -200;
-		float distanceDown = TraceOcclusion(origin, end, entity, null) * 100;
-		top = origin[1] + distanceUp;
-		bottom = origin[1] - distanceDown;
-	}
-
-	// The listener's side of the muffling check is the same for every sender, so it is traced once and
-	// reused instead of once per sender
+	// Whether we're under a roof or in a vehicle, for radio speakers heard from inside (ComputeSpeakerLR):
+	// the same for every speaker, so traced once and reused
 	float m_fListenerOcclusionTime = -1;
 	bool m_bListenerInBuilding;
 	bool m_bListenerInVehicle;
-	float m_fListenerTop;
-	float m_fListenerBottom;
 	void UpdateListenerOcclusion(IEntity player)
 	{
 		if (m_fListenerOcclusionTime >= 0 && m_fTime - m_fListenerOcclusionTime < OCCLUSION_TALKING_INTERVAL)
@@ -1948,14 +2018,6 @@ modded class SCR_VONController
 		bool inVehicle;
 		m_bListenerInBuilding = IsInBuildingOrVehicle(player, building, inVehicle);
 		m_bListenerInVehicle = inVehicle;
-		if (m_bListenerInBuilding)
-		{
-			float top;
-			float bottom;
-			DetermineHearingWindow(player, top, bottom);
-			m_fListenerTop = top;
-			m_fListenerBottom = bottom;
-		}
 	}
 
 	bool CheckIfInSameVehicle(IEntity senderEntity, IEntity player)
@@ -1993,37 +2055,32 @@ modded class SCR_VONController
 		if (IsListeningFromCamera())
 			return false;
 
-		if (CanPlayerSeeSender(senderEntity, player))
+		return ShouldMuffleBetween(senderEntity, player, loweredDecibles);
+	}
+
+	//A talker's voice is muffled when something solid is between their head and the listener's: a wall, a
+	//closed door, a floor, a vehicle's body (trees, people, fences and small props don't count, see
+	//LetsVoiceThrough). Stronger when either of them is in a vehicle. This used to muffle only when one was
+	//inside a building and the other outside (or a floor apart), so a wall or a closed door between two rooms,
+	//or a wall between two people outside, let a voice through clear.
+	bool ShouldMuffleBetween(IEntity senderEntity, IEntity listener, out int loweredDecibles)
+	{
+		loweredDecibles = 0;
+		if (!senderEntity || !listener)
 			return false;
 
-		//quick sanity check as the roof traces can sometimes be off if the players hatch is open
-		if (CheckIfInSameVehicle(senderEntity, player))
+		if (CanPlayerSeeSender(senderEntity, listener))
 			return false;
 
-		UpdateListenerOcclusion(player);
-		IEntity senderBuilding;
-		bool isSenderInVehicle;
-		bool isSenderInBuilding = IsInBuildingOrVehicle(senderEntity, senderBuilding, isSenderInVehicle);
-
-		if (!isSenderInBuilding && !m_bListenerInBuilding)
+		//Sitting in the same vehicle: no muffling between seats
+		if (CheckIfInSameVehicle(senderEntity, listener))
 			return false;
 
-		if (m_bListenerInBuilding != isSenderInBuilding)
-		{
-			if (m_bListenerInVehicle || isSenderInVehicle)
-				loweredDecibles = CVON_DB_ATTEN_VEHICLE;
-			else
-				loweredDecibles = CVON_DB_ATTEN_BUILDING;
-			return true;
-		}
-
-		vector senderOrigin = GetHeadHeight(senderEntity);
-		if (senderOrigin[1] > m_fListenerTop || senderOrigin[1] < m_fListenerBottom)
-		{
+		if (Vehicle.Cast(senderEntity.GetRootParent()) || Vehicle.Cast(listener.GetRootParent()))
+			loweredDecibles = CVON_DB_ATTEN_VEHICLE;
+		else
 			loweredDecibles = CVON_DB_ATTEN_BUILDING;
-			return true;
-		}
-		return false;
+		return true;
 	}
 
 	//A talker's own voice: position, distance, voice range tier and muffling. False when they're out of
